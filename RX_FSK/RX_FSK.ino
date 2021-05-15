@@ -2956,7 +2956,9 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
 	time_t t = s->time;
 	
 	ts = *gmtime(&t);
-  //TODO convert back to GPS time from UTC time +18s
+  if (String(sondeTypeStr[s->type]) == "RS41") {
+    ts.tm_sec += 12; //convert back to GPS time from UTC time +18s
+  }
   Serial.println(sondeTypeStr[s->type]);
 	memset(rs_msg, 0, 450);
 	w=rs_msg;
@@ -3000,18 +3002,19 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
 		}
 	}
 
-	client->println("PUT /sondes/telemetry HTTP/1.1");
-    client->print("Host: ");
-	client->println(conf->host);
-	client->println("accept: text/plain");
-	client->println("Content-Type: application/json");
-	client->print("Content-Length: ");
-	client->println(strlen(w));
-    client->println();
-    client->println(w);
-	Serial.println(w);
-    //String response = client->readString();
-	//Serial.println(response);
-	//client->stop();
+  if (String(sondeTypeStr[s->type]) != "xxxxxxxx") {
+    client->println("PUT /sondes/telemetry HTTP/1.1");
+      client->print("Host: ");
+    client->println(conf->host);
+    client->println("accept: text/plain");
+    client->println("Content-Type: application/json");
+    client->print("Content-Length: ");
+    client->println(strlen(w));
+      client->println();
+      client->println(w);
+    Serial.println(w);
+  } else {
+    Serial.println("Graw DFM Serial not detected yet");
+  }
 }
 // End of sondehub v2 related codes
