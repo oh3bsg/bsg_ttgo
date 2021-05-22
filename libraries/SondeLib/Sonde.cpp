@@ -6,6 +6,7 @@
 #include "RS92.h"
 #include "DFM.h"
 #include "M10M20.h"
+#include "MP3H.h"
 #include "SX1278FSK.h"
 #include "Display.h"
 #include <Wire.h>
@@ -18,6 +19,9 @@ const char *evstring[]={"NONE", "KEY1S", "KEY1D", "KEY1M", "KEY1L", "KEY2S", "KE
                                "VIEWTO", "RXTO", "NORXTO", "(max)"};
 
 const char *RXstr[]={"RX_OK", "RX_TIMEOUT", "RX_ERROR", "RX_UNKNOWN"};
+
+// Dependency to enum SondeType
+const char *manufacturer_string[]={"Graw", "Graw", "Vaisala", "Vaisala", "Meteomodem", "Meteomodem", "Graw", "???"};
 
 int fingerprintValue[]={ 17, 31, 64, 4, 55, 48, 23, 128+23, 119, 128+119, -1 };
 const char *fingerprintText[]={
@@ -87,6 +91,7 @@ void Sonde::defaultConfig() {
 	config.button2_axp = 0;
 	config.norx_timeout = 20;
 	config.screenfile = 1;
+	config.tft_modeflip = 0;
 	if(initlevels[16]==0) {
 		config.oled_sda = 4;
 		config.oled_scl = 15;
@@ -114,6 +119,7 @@ void Sonde::defaultConfig() {
 				//config.button2_pin = 255;
 				config.button2_axp = 1;
 				config.gps_rxd = 34;
+				config.gps_txd = 12;
 				// Check for I2C-Display@21,22
 #define SSD1306_ADDRESS 0x3c
 				Wire.begin(21, 22);
@@ -189,6 +195,8 @@ void Sonde::defaultConfig() {
 	config.dfm.rxbw=10400;
 	config.m10m20.agcbw=20800;
 	config.m10m20.rxbw=12500;
+	config.mp3h.agcbw=12500;
+	config.mp3h.rxbw=12500;
 	config.udpfeed.active = 1;
 	config.udpfeed.type = 0;
 	strcpy(config.udpfeed.host, "192.168.42.20");
@@ -257,6 +265,8 @@ void Sonde::setConfig(const char *cfg) {
 		config.tft_cs = atoi(val);
 	} else if(strcmp(cfg,"tft_orient")==0) {
 		config.tft_orient = atoi(val);
+	} else if(strcmp(cfg,"tft_modeflip")==0) {
+		config.tft_modeflip = atoi(val);
 	} else if(strcmp(cfg,"gps_rxd")==0) {
 		config.gps_rxd = atoi(val);
 	} else if(strcmp(cfg,"gps_txd")==0) {
@@ -307,6 +317,10 @@ void Sonde::setConfig(const char *cfg) {
 		config.m10m20.agcbw = atoi(val);
 	} else if(strcmp(cfg,"m10m20.rxbw")==0) {
 		config.m10m20.rxbw = atoi(val);
+	} else if(strcmp(cfg,"mp3h.agcbw")==0) {
+		config.mp3h.agcbw = atoi(val);
+	} else if(strcmp(cfg,"mp3h.rxbw")==0) {
+		config.mp3h.rxbw = atoi(val);
 	} else if(strcmp(cfg,"dfm.agcbw")==0) {
 		config.dfm.agcbw = atoi(val);
 	} else if(strcmp(cfg,"dfm.rxbw")==0) {
@@ -360,7 +374,22 @@ void Sonde::setConfig(const char *cfg) {
 		strncpy(config.mqtt.password, val, 63);
 	} else if(strcmp(cfg,"mqtt.prefix")==0) {
 		strncpy(config.mqtt.prefix, val, 63);
-
+	} else if(strcmp(cfg, "sondehub.active")==0) {
+		config.sondehub.active = atoi(val);
+	} else if(strcmp(cfg, "sondehub.host")==0) {
+		strncpy(config.sondehub.host, val, 63);
+	} else if(strcmp(cfg, "sondehub.callsign")==0) {
+		strncpy(config.sondehub.callsign, val, 63);
+	} else if(strcmp(cfg, "sondehub.lat")==0) {
+		strncpy(config.sondehub.lat, val, 19);
+	} else if(strcmp(cfg, "sondehub.lon")==0) {
+		strncpy(config.sondehub.lon, val, 19);
+	} else if(strcmp(cfg, "sondehub.alt")==0) {
+		strncpy(config.sondehub.alt, val, 19);
+	} else if(strcmp(cfg, "sondehub.antenna")==0) {
+		strncpy(config.sondehub.antenna, val, 63);
+	} else if(strcmp(cfg, "sondehub.email")==0) {
+		strncpy(config.sondehub.email, val, 63);
 	} else {
 		Serial.printf("Invalid config option '%s'=%s \n", cfg, val);
 	}
@@ -434,17 +463,17 @@ void Sonde::setup() {
 		Serial.print("Invalid rxtask.currentSonde: ");
 		Serial.println(rxtask.currentSonde);
 		rxtask.currentSonde = 0;
-    for(int i=0; i<config.maxsonde - 1; i++) {
-      if(!sondeList[rxtask.currentSonde].active) {
-        rxtask.currentSonde++;
-        if(rxtask.currentSonde>=nSonde) rxtask.currentSonde=0;
-      }
-    }
-    sonde.currentSonde = rxtask.currentSonde;
-  }
+		for(int i=0; i<config.maxsonde - 1; i++) {
+			if(!sondeList[rxtask.currentSonde].active) {
+				rxtask.currentSonde++;
+				if(rxtask.currentSonde>=nSonde) rxtask.currentSonde=0;
+			}
+		}
+		sonde.currentSonde = rxtask.currentSonde;
+	}
 
 	// update receiver config
-	Serial.print("\nSonde::setup() on sonde index ");
+	Serial.print("Sonde.setup() on sonde index ");
 	Serial.println(rxtask.currentSonde);
 	switch(sondeList[rxtask.currentSonde].type) {
 	case STYPE_RS41:
@@ -462,11 +491,15 @@ void Sonde::setup() {
 	case STYPE_M20:
 		m10m20.setup( sondeList[rxtask.currentSonde].freq * 1000000);
 		break;
+	case STYPE_MP3H:
+		mp3h.setup( sondeList[rxtask.currentSonde].freq * 1000000);
+		break;
 	}
 	// debug
-	float afcbw = sx1278.getAFCBandwidth();
-	float rxbw = sx1278.getRxBandwidth();
-	Serial.printf("AFC BW: %f  RX BW: %f\n", afcbw, rxbw);
+	int freq = (int)sx1278.getFrequency();
+	int afcbw = (int)sx1278.getAFCBandwidth();
+	int rxbw = (int)sx1278.getRxBandwidth();
+	Serial.printf("Sonde.setup(): Freq %d, AFC BW: %d, RX BW: %d\n", freq, afcbw, rxbw);
 
 	// reset rxtimer / norxtimer state
 	sonde.sondeList[sonde.currentSonde].lastState = -1;
@@ -493,6 +526,9 @@ void Sonde::receive() {
 	case STYPE_DFM:
 		res = dfm.receive();
 		break;
+	case STYPE_MP3H:
+		res = mp3h.receive();
+		break;
 	}
 
 	// state information for RX_TIMER / NORX_TIMER events
@@ -504,7 +540,7 @@ void Sonde::receive() {
                 }
         } else { // RX not ok
 		if(res==RX_ERROR) flashLed(100);
-		Serial.printf("RX result %d, laststate was %d\n", res, si->lastState);
+		Serial.printf("RX result %d (%s), laststate was %d\n", res, (res<=3)?RXstr[res]:"?", si->lastState);
                 if(si->lastState != 0) {
                         si->norxStart = millis();
                         si->lastState = 0;
@@ -520,7 +556,7 @@ void Sonde::receive() {
 	int event = getKeyPressEvent();
 	if (!event) event = timeoutEvent(si);
 	int action = (event==EVT_NONE) ? ACT_NONE : disp.layout->actions[event];
-	if(action!=ACT_NONE) { Serial.printf("event %x: action is %x\n", event, action); }
+	//if(action!=ACT_NONE) { Serial.printf("event %x: action is %x\n", event, action); }
 	// If action is to move to a different sonde index, we do update things here, set activate
 	// to force the sx1278 task to call sonde.setup(), and pass information about sonde to
 	// main loop (display update...)
@@ -542,7 +578,7 @@ void Sonde::receive() {
 		}
 	}
 	res = (action<<8) | (res&0xff);
-	Serial.printf("receive(): Result is %04x (action %d, res %d)\n", res, action, res&0xff);
+	Serial.printf("Sonde:receive(): Event %02x: action %02x, res %02x => %04x\n", event, action, res&0xff, res);
 	// let waitRXcomplete resume...
 	rxtask.receiveResult = res;
 }
@@ -590,6 +626,9 @@ rxloop:
 	case STYPE_DFM:
 		dfm.waitRXcomplete();
 		break;
+	case STYPE_MP3H:
+		mp3h.waitRXcomplete();
+		break;
 	}
 	memmove(sonde.si()->rxStat+1, sonde.si()->rxStat, 17);
         sonde.si()->rxStat[0] = res;
@@ -598,22 +637,22 @@ rxloop:
 
 uint8_t Sonde::timeoutEvent(SondeInfo *si) {
 	uint32_t now = millis();
-#if 1
+#if 0
 	Serial.printf("Timeout check: %d - %d vs %d; %d - %d vs %d; %d - %d vs %d; lastState: %d\n",
 		now, si->viewStart, disp.layout->timeouts[0],
 		now, si->rxStart, disp.layout->timeouts[1],
 		now, si->norxStart, disp.layout->timeouts[2], si->lastState);
 #endif
 	if(disp.layout->timeouts[0]>=0 && now - si->viewStart >= disp.layout->timeouts[0]) {
-		Serial.println("View timer expired");
+		Serial.println("Sonde.timeoutEvent: View");
 		return EVT_VIEWTO;
 	}
 	if(si->lastState==1 && disp.layout->timeouts[1]>=0 && now - si->rxStart >= disp.layout->timeouts[1]) {
-		Serial.println("RX timer expired");
+		Serial.println("Sonde.timeoutEvent: RX");
 		return EVT_RXTO;
 	}
 	if(si->lastState==0 && disp.layout->timeouts[2]>=0 && now - si->norxStart >= disp.layout->timeouts[2]) {
-		Serial.println("NORX timer expired");
+		Serial.println("Sonde.timeoutEvent: NORX");
 		return EVT_NORXTO;
 	}
 	return 0;

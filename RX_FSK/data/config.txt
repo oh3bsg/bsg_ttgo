@@ -25,8 +25,9 @@
 #tft_rs=2
 #tft_cs=0
 tft_orient=1
+#tft_modeflip=0
 #gps_rxd=-1
-gps_txd=-1
+#gps_txd=-1
 # Show AFC value (for RS41 and M10/M20, maybe also DFM, but not useful for RS92)
 showafc=1
 # Frequency correction, in Hz
@@ -90,7 +91,7 @@ ephftp=www.ngs.noaa.gov/cors/rinex/
 #-------------------------------#
 # local use only, do not feed to public services
 # data not sanitized / quality checked, outliers not filtered out
-axudp.active=1
+axudp.active=0
 axudp.host=192.168.42.20
 axudp.port=9002
 axudp.symbol=/O
@@ -111,12 +112,24 @@ tcp.idformat=0
 #-------------------------------#
 # data not sanitized / quality checked, outliers not filtered out
 mqtt.active=0
-mqtt.id=rdz_sonde_server
-mqtt.ip=
-mqtt.port=1883
+mqtt.id=BSG_MQTT
+mqtt.ip=192.168.1.5
+mqtt.port=1884
 mqtt.username=
 mqtt.password=
 mqtt.prefix=rdz_sonde_server/
+#-------------------------------#
+# Sondehub v2 settings
+#-------------------------------#
+# Sondehub v2 DB settings
+sondehub.active=1
+sondehub.host=api.v2.sondehub.org
+sondehub.callsign=CHANGEME_BSG_TTGO
+sondehub.lat=null
+sondehub.lon=null
+sondehub.alt=null
+sondehub.antenna=
+sondehub.email=
 #-------------------------------#
 # EOF
 #-------------------------------#

@@ -2,6 +2,15 @@
 # Type (4=RS41, 6=DFM normal, DFM-06, 9=DFM inverted, DFM-09)
 #
 403.000 4 + Jokioinen
+405.300 4 + Sundsvall
+404.000 4 + Tallinn
+401.000 4 + Niinisalo
+401.800 4 + Vaisala
+402.000 4 + Vaisala
+402.700 4 + Vaisala
+402.400 4 + Vaisala
+403.500 4 + Katajaluoto
+402.500 4 + Katajaluoto
 404.000 4 + Tallinn
 405.300 4 + Sundsvall
 # end

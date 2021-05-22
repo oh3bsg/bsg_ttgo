@@ -41,6 +41,8 @@ int M10M20::setup(float frequency)
         Serial.print("M10/M20: setting RX frequency to ");
         Serial.println(frequency);
         int res = sx1278.setFrequency(frequency);
+	// Test: maybe fix issue after spectrum display?
+	sx1278.writeRegister(REG_PLL_HOP, 0);
 
         if(sx1278.setAFCBandwidth(sonde.config.m10m20.agcbw)!=0) {
                 M10M20_DBG(Serial.printf("Setting AFC bandwidth %d Hz FAILED", sonde.config.m10m20.agcbw));
@@ -108,7 +110,7 @@ int M10M20::setup(float frequency)
         }
 
 	///// Enable auto-AFC, auto-AGC, RX Trigger by preamble
-	///if(sx1278.setRxConf(0x1E)!=0) {
+	//if(sx1278.setRxConf(0x1E)!=0) {
 	// Disable auto-AFC, auto-AGC, RX Trigger by preamble
 	if(sx1278.setRxConf(0x00)!=0) {
 		M10M20_DBG(Serial.println("Setting RX Config FAILED"));
@@ -135,7 +137,6 @@ int M10M20::setup(float frequency)
 
         // enable RX
         sx1278.setPayloadLength(0);  // infinite for now...
-	//sx1278.setPayloadLength(292);
         sx1278.setRxConf(0x20);
 	uint16_t afc = sx1278.getRawAFC();
         sx1278.writeRegister(REG_OP_MODE, FSK_RX_MODE);
@@ -368,7 +369,7 @@ void M10M20::processM10data(uint8_t dt)
                                 int rssi=sx1278.getRSSI();
                                 int fei=sx1278.getFEI();
                                 int afc=sx1278.getAFC();
-                                Serial.print("Test: RSSI="); Serial.print(rssi);
+                                Serial.print("SYNC!!! Test: RSSI="); Serial.print(rssi);
                                 Serial.print(" FEI="); Serial.print(fei);
                                 Serial.print(" AFC="); Serial.println(afc);
                                 sonde.si()->rssi = rssi;
@@ -514,7 +515,7 @@ int M10M20::decodeframeM20(uint8_t *data) {
 		
 	ids[0] = 'M';
 	ids[1] = 'E';
-	uint32_t id = getint16(data+18);
+	uint32_t id = data[18];  // getint16(data+18);
 	ids[2] = hex(id/16);
 	ids[3] = hex(id);
 	//
@@ -524,9 +525,24 @@ int M10M20::decodeframeM20(uint8_t *data) {
 	ids[6] = (char)((id/100)%10+48);
 	ids[7] = (char)((id/10)%10+48);
 	ids[8] = (char)(id%10+48);
+	strncpy(sonde.si()->id, ids, 10);
+	// Serial: AAB-C-DDEEE
+	char *ser = sonde.si()->ser;
+	uint8_t tmp = data[18] & 0x7F;
+	ser[0] = (tmp/12) + '0';
+	ser[1] = ((tmp%12 + 1) / 10 ) + '0';
+	ser[2] = ((tmp%12 + 1) % 10 ) + '0';
+	ser[3] = '-';
+	ser[4] = (data[18]/128) + 1 + '0';
+	ser[5] = '-';
+	ser[6] = ids[4];
+	ser[7] = ids[5];
+	ser[8] = ids[6];
+	ser[9] = ids[7];
+	ser[10] = ids[8];
+	ser[11] = 0;
 
 	// TODO
-	strncpy(sonde.si()->ser, ids, 10);
 	if(crcok) {
 	sonde.si()->validID = true;
 	//Serial.printf("ID is %s [%02x %02x %d]\n", ids, data[95], data[93], id);

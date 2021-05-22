@@ -53,11 +53,12 @@ extern const char *RXstr[];
 // 01000000 => goto sonde -1
 // 01000001 => goto sonde +1
 
-#define NSondeTypes 7
-enum SondeType { STYPE_DFM, STYPE_DFM09_OLD, STYPE_RS41, STYPE_RS92, STYPE_M10, STYPE_M20, STYPE_DFM06_OLD };
+#define NSondeTypes 8
+enum SondeType { STYPE_DFM, STYPE_DFM09_OLD, STYPE_RS41, STYPE_RS92, STYPE_M10, STYPE_M20, STYPE_DFM06_OLD, STYPE_MP3H };
 extern const char *sondeTypeStr[NSondeTypes];
 extern const char *sondeTypeLongStr[NSondeTypes];
 extern const char sondeTypeChar[NSondeTypes];
+extern const char *manufacturer_string[NSondeTypes];
 
 #define TYPE_IS_DFM(t) ( (t)==STYPE_DFM || (t)==STYPE_DFM09_OLD || (t)==STYPE_DFM06_OLD )
 #define TYPE_IS_METEO(t) ( (t)==STYPE_M10 || (t)==STYPE_M20 )
@@ -99,6 +100,11 @@ typedef struct st_sondeinfo {
 	// shut down timers, currently only for RS41; -1=disabled
 	int16_t launchKT, burstKT, countKT;
 	uint16_t crefKT; // frame number in which countKT was last sent
+	// sonde specific extra data, NULL if unused or not yet initialized, currently used for RS41 subframe data (calibration)
+        void *extra;
+	float temperature = -300.0; // platinum resistor temperature
+	float tempRHSensor = -300.0; // temperature of relative humidity sensor
+	float relativeHumidity = -1.0; // relative humidity
 } SondeInfo;
 // rxStat: 3=undef[empty] 1=timeout[.] 2=errro[E] 0=ok[|] 4=no valid position[°]
 
@@ -138,6 +144,10 @@ struct st_m10m20config {
 	int agcbw;
 	int rxbw;
 };
+struct st_mp3hconfig {
+	int agcbw;
+	int rxbw;
+};
 
 
 enum IDTYPE { ID_DFMDXL, ID_DFMGRAW, ID_DFMAUTO };
@@ -171,6 +181,17 @@ struct st_mqtt {
 	char prefix[64];
 };
 
+struct st_sondehub {
+	int active;
+	char host[64];
+	char callsign[64];
+	char lat[20];
+	char lon[20];
+	char alt[20];
+	char antenna[64];
+	char email[64];
+};
+
 typedef struct st_rdzconfig {
 	// hardware configuration
 	int button_pin;			// PIN port number menu button (+128 for touch mode)
@@ -186,6 +207,7 @@ typedef struct st_rdzconfig {
 	int tft_rs;			// TFT RS pin
 	int tft_cs;			// TFT CS pin
 	int tft_orient;			// TFT orientation (default: 1)
+	int tft_modeflip;		// Hack for Joerg's strange display
 	int gps_rxd;			// GPS module RXD pin. We expect 9600 baud NMEA data.
 	int gps_txd;			// GPS module TXD pin
 	// software configuration
@@ -209,6 +231,7 @@ typedef struct st_rdzconfig {
 	struct st_rs92config rs92;
 	struct st_dfmconfig dfm;
 	struct st_m10m20config m10m20;
+	struct st_mp3hconfig mp3h;
 	char ephftp[40];
 	// data feed configuration
 	// for now, one feed for each type is enough, but might get extended to more?
@@ -218,6 +241,7 @@ typedef struct st_rdzconfig {
 	struct st_feedinfo tcpfeed;	// target for APRS-IS TCP connections
 	struct st_kisstnc kisstnc;	// target for KISS TNC (via TCP, mainly for APRSdroid)
 	struct st_mqtt mqtt;
+	struct st_sondehub sondehub;
 } RDZConfig;
 
 

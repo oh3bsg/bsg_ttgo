@@ -2,6 +2,7 @@
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
+//#include <WiFiClientSecure.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 //#include <U8x8lib.h>
@@ -11,7 +12,6 @@
 #include <ESPmDNS.h>
 #include <MicroNMEA.h>
 #include <Ticker.h>
-
 #include <SX1278FSK.h>
 #include <Sonde.h>
 #include <Display.h>
@@ -27,9 +27,9 @@ int e;
 
 enum MainState { ST_DECODER, ST_SPECTRUM, ST_WIFISCAN, ST_UPDATE, ST_TOUCHCALIB };
 static MainState mainState = ST_WIFISCAN; // ST_WIFISCAN;
+const char *mainStateStr[5] = {"DECODER", "SPECTRUM", "WIFISCAN", "UPDATE", "TOUCHCALIB" };
 
 AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
 
 AXP20X_Class axp;
 #define PMU_IRQ             35
@@ -47,6 +47,9 @@ String *updateBin = &updateBinM;
 boolean connected = false;
 WiFiUDP udp;
 WiFiClient client;
+//WiFiClient rsclient;	// Radiosondy client
+//WiFiClientSecure shclient;	// Sondehub v2
+WiFiClient shclient;	// Sondehub v2
 
 // KISS over TCP for communicating with APRSdroid
 WiFiServer tncserver(14580);
@@ -107,6 +110,7 @@ int readLine(Stream &stream, char *buffer, int maxlen) {
   }
   return n;
 }
+
 
 // Replaces placeholder with LED state value
 String processor(const String& var) {
@@ -198,6 +202,9 @@ void setupChannelList() {
     else if (space[1] == '2') {
       type = STYPE_M20;
     }
+    else if (space[1] == '3') {
+      type = STYPE_MP3H;
+    }
     else continue;
     int active = space[3] == '+' ? 1 : 0;
     if (space[4] == ' ') {
@@ -214,40 +221,57 @@ void setupChannelList() {
   file.close();
 }
 
+const char *HTMLHEAD = "<html><head> <meta charset=\"UTF-8\"> <link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\">";
+void HTMLBODY(char *ptr, const char *which) {
+  strcat(ptr, "<body><form class=\"wrapper\" action=\"");
+  strcat(ptr, which);
+  strcat(ptr, "\" method=\"post\"><div class=\"content\">");
+}
+void HTMLBODYEND(char *ptr) {
+  strcat(ptr, "</div></form></body></html>");
+}
+void HTMLSAVEBUTTON(char *ptr) {
+  strcat(ptr, "</div><div class=\"footer\"><input type=\"submit\" class=\"save\" value=\"Save changes\"/>");
+}
+
 const char *createQRGForm() {
   char *ptr = message;
-  strcpy(ptr, "<html><head><link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\">");
-  strcat(ptr, "<script type=\"text/javascript\">"
-     "let stypes=new Map();"
-     "stypes.set('4', 'RS41');"
-     "stypes.set('R', 'RS92');"
-     "stypes.set('9', 'DFM9 (old)');"
-     "stypes.set('6', 'DFM6 (old)');"
-     "stypes.set('D', 'DFM');"
-     "stypes.set('M', 'M10');"
-     "stypes.set('2', 'M20');"
-     "function prep() {"
-     " var stlist=document.querySelectorAll(\"input.stype\");"
-     " for(txt of stlist){"
-     "  var val=txt.getAttribute('value'); var nam=txt.getAttribute('name'); "
-     "  var sel=document.createElement('select');"
-     "  sel.setAttribute('name',nam);"
-     "  for(stype of stypes) { "
-     "   var opt=document.createElement('option');"
-     "   opt.value=stype[0];"
-     "   opt.innerHTML=stype[1];"
-     "   if(stype[0]==val) { opt.setAttribute('selected','selected'); }"
-     "   sel.appendChild(opt);"
-     "  } txt.replaceWith(sel); } } "
-     "  window.onload = prep; "
-     "</script>");
-     
-  strcat(ptr, "</head><body><form action=\"qrg.html\" method=\"post\"><table><tr><th>ID</th><th>Active</th><th>Freq</th><th>Launchsite</th><th>Mode</th></tr>");
+  strcpy(ptr, HTMLHEAD);
+  strcat(ptr, "<script src=\"rdz.js\"/>  <script> window.onload = prep; </script></head>");
+  /*
+    strcat(ptr, "<script type=\"text/javascript\">"
+       "let stypes=new Map();"
+       "stypes.set('4', 'RS41');"
+       "stypes.set('R', 'RS92');"
+       "stypes.set('9', 'DFM9 (old)');"
+       "stypes.set('6', 'DFM6 (old)');"
+       "stypes.set('D', 'DFM');"
+       "stypes.set('M', 'M10');"
+       "stypes.set('2', 'M20');"
+       "function prep() {"
+       " var stlist=document.querySelectorAll(\"input.stype\");"
+       " for(txt of stlist){"
+       "  var val=txt.getAttribute('value'); var nam=txt.getAttribute('name'); "
+       "  var sel=document.createElement('select');"
+       "  sel.setAttribute('name',nam);"
+       "  for(stype of stypes) { "
+       "   var opt=document.createElement('option');"
+       "   opt.value=stype[0];"
+       "   opt.innerHTML=stype[1];"
+       "   if(stype[0]==val) { opt.setAttribute('selected','selected'); }"
+       "   sel.appendChild(opt);"
+       "  } txt.replaceWith(sel); } } "
+       "  window.onload = prep; "
+       "</script>");
+  */
+  HTMLBODY(ptr, "qrg.html");
+  //strcat(ptr, "<body><form class=\"wrapper\" action=\"qrg.html\" method=\"post\"><div class=\"content\"><table><tr><th>ID</th><th>Active</th><th>Freq</th><th>Launchsite</th><th>Mode</th></tr>");
+  strcat(ptr, "<table><tr><th>ID</th><th>Active</th><th>Freq</th><th>Launchsite</th><th>Mode</th></tr>");
   for (int i = 0; i < sonde.config.maxsonde; i++) {
     //String s = sondeTypeSelect(i >= sonde.nSonde ? 2 : sonde.sondeList[i].type);
     String site = sonde.sondeList[i].launchsite;
     sprintf(ptr + strlen(ptr), "<tr><td>%d</td><td><input name=\"A%d\" type=\"checkbox\" %s/></td>"
-            "<td><input name=\"F%d\" type=\"text\" value=\"%3.3f\"></td>"
+            "<td><input name=\"F%d\" type=\"text\" width=12 value=\"%3.3f\"></td>"
             "<td><input name=\"S%d\" type=\"text\" value=\"%s\"></td>"
             //"<td><select name=\"T%d\">%s</select></td>",
             "<td><input class='stype' name='T%d' value='%c'>",
@@ -256,9 +280,12 @@ const char *createQRGForm() {
             i + 1, i >= sonde.nSonde ? 400.000 : sonde.sondeList[i].freq,
             i + 1, i >= sonde.nSonde ? "                " : sonde.sondeList[i].launchsite,
             i + 1, i >= sonde.nSonde ? 2 : sondeTypeChar[sonde.sondeList[i].type] );
-            //i + 1, s.c_str());
+    //i + 1, s.c_str());
   }
-  strcat(ptr, "</table><input type=\"submit\" value=\"Update\"/></form></body></html>");
+  strcat(ptr, "</table>");
+  //</div><div class=\"footer\"><input type=\"submit\" class=\"update\" value=\"Update\"/>");
+  HTMLSAVEBUTTON(ptr);
+  HTMLBODYEND(ptr);
   Serial.printf("QRG form: size=%d bytes\n", strlen(message));
   return message;
 }
@@ -353,7 +380,9 @@ void setupWifiList() {
 const char *createWIFIForm() {
   char *ptr = message;
   char tmp[4];
-  strcpy(ptr, "<html><head><link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\"></head><body><form action=\"wifi.html\" method=\"post\"><table><tr><th>Nr</th><th>SSID</th><th>Password</th></tr>");
+  strcpy(ptr, HTMLHEAD); strcat(ptr, "</head>");
+  HTMLBODY(ptr, "wifi.html");
+  strcat(ptr, "<table><tr><th>Nr</th><th>SSID</th><th>Password</th></tr>");
   for (int i = 0; i < MAX_WIFI; i++) {
     sprintf(tmp, "%d", i);
     sprintf(ptr + strlen(ptr), "<tr><td>%s</td><td><input name=\"S%d\" type=\"text\" value=\"%s\"/></td>"
@@ -362,7 +391,10 @@ const char *createWIFIForm() {
             i + 1, i < nNetworks ? networks[i].id.c_str() : "",
             i + 1, i < nNetworks ? networks[i].pw.c_str() : "");
   }
-  strcat(ptr, "</table><input type=\"submit\" value=\"Update\"></input></form></body></html>");
+  strcat(ptr, "</table>");
+  //</div><div class=\"footer\"><input type=\"submit\" class=\"update\" value=\"Update\"/>");
+  HTMLSAVEBUTTON(ptr);
+  HTMLBODYEND(ptr);
   Serial.printf("WIFI form: size=%d bytes\n", strlen(message));
   return message;
 }
@@ -413,7 +445,7 @@ void addSondeStatus(char *ptr, int i)
   strcat(ptr, "<table>");
   sprintf(ptr + strlen(ptr), "<tr><td id=\"sfreq\">%3.3f MHz, Type: %s</td><tr><td>ID: %s", s->freq, sondeTypeLongStr[s->type],
           s->validID ? s->id : "<?""?>");
-  if (s->validID && (TYPE_IS_DFM(s->type) || TYPE_IS_METEO(s->type)) ) {
+  if (s->validID && (TYPE_IS_DFM(s->type) || TYPE_IS_METEO(s->type) || s->type==STYPE_MP3H) ) {
     sprintf(ptr + strlen(ptr), " (ser: %s)", s->ser);
   }
   sprintf(ptr + strlen(ptr), "</td></tr><tr><td>QTH: %.6f,%.6f h=%.0fm</td></tr>\n", s->lat, s->lon, s->alt);
@@ -428,15 +460,17 @@ void addSondeStatus(char *ptr, int i)
   sprintf(ptr + strlen(ptr), "<tr><td><a target=\"_empty\" href=\"geo:%.6f,%.6f\">GEO-App</a> - ", s->lat, s->lon);
   sprintf(ptr + strlen(ptr), "<a target=\"_empty\" href=\"https://wetterson.de/karte/?%s\">wetterson.de</a> - ", s->id);
   sprintf(ptr + strlen(ptr), "<a target=\"_empty\" href=\"https://radiosondy.info/sonde_archive.php?sondenumber=%s\">radiosondy.info</a> - ", s->id);
+  sprintf(ptr + strlen(ptr), "<a target=\"_empty\" href=\"https://tracker.sondehub.org/%s\">SondeHub Tracker</a> - ", s->id);
   sprintf(ptr + strlen(ptr), "<a target=\"_empty\" href=\"https://www.openstreetmap.org/?mlat=%.6f&mlon=%.6f&zoom=14\">OSM</a> - ", s->lat, s->lon);
   sprintf(ptr + strlen(ptr), "<a target=\"_empty\" href=\"https://www.google.com/maps/search/?api=1&query=%.6f,%.6f\">Google</a></td></tr>", s->lat, s->lon);
-  
+
   strcat(ptr, "</table><p/>\n");
 }
 
 const char *createStatusForm() {
   char *ptr = message;
-  strcpy(ptr, "<html><head><link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\"><meta http-equiv=\"refresh\" content=\"5\"></head><body>");
+  strcpy(ptr, HTMLHEAD);
+  strcat(ptr, "<meta http-equiv=\"refresh\" content=\"5\"></head><body>");
 
   for (int i = 0; i < sonde.nSonde; i++) {
     int snum = (i + sonde.currentSonde) % sonde.nSonde;
@@ -498,6 +532,8 @@ struct st_configitems config_list[] = {
   {"dfm.rxbw", "DFM RX bandwidth", 0, &sonde.config.dfm.rxbw},
   {"m10m20.agcbw", "M10/M20 AGC bandwidth", 0, &sonde.config.m10m20.agcbw},
   {"m10m20.rxbw", "M10/M20 RX bandwidth", 0, &sonde.config.m10m20.rxbw},
+  {"mp3h.agcbw", "MP3H AGC bandwidth", 0, &sonde.config.mp3h.agcbw},
+  {"mp3h.rxbw", "MP3H RX bandwidth", 0, &sonde.config.mp3h.rxbw},
   {"ephftp", "FTP for eph (RS92)", 39, &sonde.config.ephftp},
   {"", "Data feed configuration", -5, NULL},
   /* APRS settings */
@@ -518,7 +554,7 @@ struct st_configitems config_list[] = {
   {"tcp.port", "APRS TCP Port", 0, &sonde.config.tcpfeed.port},
   {"tcp.idformat", "DFM ID Format", -2, &sonde.config.tcpfeed.idformat},
   {"tcp.highrate", "Rate limit", 0, &sonde.config.tcpfeed.highrate},
-  
+
   /* MQTT */
   {"mqtt.active", "MQTT Active (needs reboot)", 0, &sonde.config.mqtt.active},
   {"mqtt.id", "MQTT client ID", 63, &sonde.config.mqtt.id},
@@ -538,6 +574,7 @@ struct st_configitems config_list[] = {
   {"tft_rs", "TFT RS", 0, &sonde.config.tft_rs},
   {"tft_cs", "TFT CS", 0, &sonde.config.tft_cs},
   {"tft_orient", "TFT orientation (0/1/2/3), OLED flip: 3", 0, &sonde.config.tft_orient},
+  {"tft_modeflip", "TFT modeflip (usually 0)", 0, &sonde.config.tft_modeflip},
   {"button_pin", "Button input port", -4, &sonde.config.button_pin},
   {"button2_pin", "Button 2 input port", -4, &sonde.config.button2_pin},
   {"button2_axp", "Use AXP192 PWR as Button 2", 0, &sonde.config.button2_axp},
@@ -547,6 +584,17 @@ struct st_configitems config_list[] = {
   {"gps_rxd", "GPS RXD pin (-1 to disable)", 0, &sonde.config.gps_rxd},
   {"gps_txd", "GPS TXD pin (not really needed)", 0, &sonde.config.gps_txd},
   {"mdnsname", "mDNS name", 14, &sonde.config.mdnsname},
+
+  /* Sondehub v2 settings */
+  {"", "Sondehub v2 settings", -5, NULL},
+  {"sondehub.active", "Sondehub reporting active", 0, &sonde.config.sondehub.active},
+  {"sondehub.host", "Sondehub host", 63, &sonde.config.sondehub.host},
+  {"sondehub.callsign", "Callsign", 63, &sonde.config.sondehub.callsign},
+  {"sondehub.lat", "Latitude", 19, &sonde.config.sondehub.lat},
+  {"sondehub.lon", "Longitude", 19, &sonde.config.sondehub.lon},
+  {"sondehub.alt", "Altitude", 19, &sonde.config.sondehub.alt},
+  {"sondehub.antenna", "Antenna", 63, &sonde.config.sondehub.antenna},
+  {"sondehub.email", "Sondehub email", 63, &sonde.config.sondehub.email},
 
 };
 const static int N_CONFIG = (sizeof(config_list) / sizeof(struct st_configitems));
@@ -607,7 +655,9 @@ void addConfigInt8List(char *ptr, int idx, const char *label, int8_t *list) {
 
 const char *createConfigForm() {
   char *ptr = message;
-  strcpy(ptr, "<html><head><link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\"></head><body><form action=\"config.html\" method=\"post\"><table><tr><th>Option</th><th>Value</th></tr>");
+  strcpy(ptr, HTMLHEAD); strcat(ptr, "</head>");
+  HTMLBODY(ptr, "config.html");
+  strcat(ptr, "<table><tr><th>Option</th><th>Value</th></tr>");
   for (int i = 0; i < N_CONFIG; i++) {
     switch (config_list[i].type) {
       case -5: // Heading
@@ -636,7 +686,10 @@ const char *createConfigForm() {
         break;
     }
   }
-  strcat(ptr, "</table><input type=\"submit\" value=\"Update\"></input></form></body></html>");
+  strcat(ptr, "</table>");
+  //</div><div class=\"footer\"><input type=\"submit\" class=\"update\" value=\"Update\"/>");
+  HTMLSAVEBUTTON(ptr);
+  HTMLBODYEND(ptr);
   Serial.printf("Config form: size=%d bytes\n", strlen(message));
   return message;
 }
@@ -695,21 +748,25 @@ const char *handleConfigPost(AsyncWebServerRequest *request) {
 
 const char *ctrlid[] = {"rx", "scan", "spec", "wifi", "rx2", "scan2", "spec2", "wifi2"};
 
-const char *ctrllabel[] = {"Receiver (short keypress)", "Scanner (double keypress)", "Spectrum (medium keypress)", "WiFi (long keypress)",
-                           "Button 2 (short keypress)", "Button 2 (double keypress)", "Button 2 (medium keypress)", "Button 2 (long keypress)"
+const char *ctrllabel[] = {"Receiver/next freq. (short keypress)", "Scanner (double keypress)", "Spectrum (medium keypress)", "WiFi (long keypress)",
+                           "Button 2/next screen (short keypress)", "Button 2 (double keypress)", "Button 2 (medium keypress)", "Button 2 (long keypress)"
                           };
 
 const char *createControlForm() {
   char *ptr = message;
-  strcpy(ptr, "<html><head><link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\"></head><body><form action=\"control.html\" method=\"post\">");
+  strcpy(ptr, HTMLHEAD); strcat(ptr, "</head>");
+  HTMLBODY(ptr, "control.html");
   for (int i = 0; i < 8; i++) {
-    strcat(ptr, "<input type=\"submit\" name=\"");
+    strcat(ptr, "<input class=\"ctlbtn\" type=\"submit\" name=\"");
     strcat(ptr, ctrlid[i]);
     strcat(ptr, "\" value=\"");
     strcat(ptr, ctrllabel[i]);
-    strcat(ptr, "\"></input><br>");
+    strcat(ptr, "\"></input>");
+    if (i == 3) {
+      strcat(ptr, "<p></p>");
+    }
   }
-  strcat(ptr, "</form></body></html>");
+  HTMLBODYEND(ptr);
   Serial.printf("Control form: size=%d bytes\n", strlen(message));
   return message;
 }
@@ -755,6 +812,55 @@ const char *handleControlPost(AsyncWebServerRequest *request) {
     }
   }
   return "";
+}
+
+int streamEditForm(int &state, File &file, String filename, char *buffer, size_t maxlen, size_t index) {
+  Serial.printf("streamEdit: state=%d  max:%d idx:%d\n", state, maxlen, index);
+  int i = 0;
+  switch (state) {
+    case 0: // header
+      {
+        // we optimistically assume that on first invocation, maxlen is large enough to handle the header.....
+        strncpy(buffer, "<html><head><title>Editor</title></head><body><p>Edit: ", maxlen);
+        i = strlen(buffer);
+        strncpy(buffer + i, filename.c_str(), maxlen - i);
+        i += strlen(buffer + i);
+        strncpy(buffer + i, "</p><form action=\"edit.html?file=", maxlen - i);
+        i += strlen(buffer + i);
+        strncpy(buffer + i, filename.c_str(), maxlen - i);
+        i += strlen(buffer + i);
+        strncpy(buffer + i, "\" method=\"post\" enctype=\"multipart/form-data\"><textarea name=\"text\" cols=\"80\" rows=\"40\">", maxlen - i);
+        i += strlen(buffer + i);
+        if (i >= maxlen) {
+          strncpy(buffer, "Out of memory", maxlen);
+          state = 3;
+          return strlen(buffer);
+        }
+        state++;
+        Serial.printf("Wrote %d bytes. Header finished", i);
+        return i;
+        break;
+      }
+    case 1: // file content
+      while (file.available()) {
+        int cnt = readLine(file, buffer + i, maxlen - i - 1);
+        i += cnt;
+        buffer[i++] = '\n';
+        buffer[i] = 0;
+        if (i + 256 > maxlen) break; // max line length in file 256 chars
+      }
+      if (i > 0) return i;
+      file.close();
+      state++;  // intentional fall-through
+    case 2:  // footer
+      Serial.println("Appending footer\n");
+      strncpy(buffer, "</textarea><input type=\"submit\" value=\"Save\"></input></form></body></html>", maxlen);
+      state++;
+      return strlen(buffer);
+    case 3:  // end
+      return 0;
+  }
+  return 0;
 }
 
 // bad idea. prone to buffer overflow. use at your own risk...
@@ -869,6 +975,48 @@ const char *handleUpdatePost(AsyncWebServerRequest *request) {
   return "";
 }
 
+const char *createKMLLive(const char *myIP) {
+  char *ptr = message;
+
+  strcpy(ptr, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\"><NetworkLink><name>loads dynamic.kml</name><Link><href>http://");
+  strcat(ptr, myIP);
+  strcat(ptr, "/dynamic.kml</href><refreshMode>onInterval</refreshMode><refreshInterval>10</refreshInterval></Link></NetworkLink></kml>");
+
+  return message;
+}
+
+void addSondeStatusKML(char *ptr, int i)
+{
+  SondeInfo *s = &sonde.sondeList[i];
+
+  if (!s->validID)
+  {
+    return;
+  }
+
+  sprintf(ptr + strlen(ptr), "<Placemark id=\"%s\"><name>%s</name><Point><coordinates>%.6f,%.6f,%.0f</coordinates></Point><description>%3.3f MHz, Type: %s, h=%.0fm</description></Placemark>",
+    s->id, s->id,
+    s->lon, s->lat, s->alt,
+    s->freq, sondeTypeStr[s->type], s->alt);
+}
+
+const char *createKMLDynamic() {
+  char *ptr = message;
+
+  strcpy(ptr, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>");
+
+  for (int i = 0; i < sonde.nSonde; i++) {
+    int snum = (i + sonde.currentSonde) % sonde.nSonde;
+    if (sonde.sondeList[snum].active) {
+      addSondeStatusKML(ptr, snum);
+    }
+  }
+
+  strcat(ptr, "</Document></kml>");
+
+  return message;
+}
+
 
 const char *sendGPX(AsyncWebServerRequest * request) {
   Serial.println("\n\n\n********GPX request\n\n");
@@ -895,14 +1043,20 @@ const char *sendGPX(AsyncWebServerRequest * request) {
   return message;
 }
 
+#if 0
+// no longer supported
+// tcp socket / json for android app is used now
 void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
     Serial.println("Websocket client connection received");
     client->text("Hello from ESP32 Server");
+	//globalClient = client;
   } else if (type == WS_EVT_DISCONNECT) {
     Serial.println("Client disconnected");
+	globalClient = NULL;
   }
 }
+#endif
 
 
 const char* PARAM_MESSAGE = "message";
@@ -918,6 +1072,11 @@ void SetupAsyncServer() {
     request->send(SPIFFS, "/index.html", String(), false, processor);
   });
 
+/*
+  server.on("/spectrum", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/ws.html", "text/html");
+  });
+*/
   server.on("/test.html", HTTP_GET, [](AsyncWebServerRequest * request) {
     request->send(SPIFFS, "/test.html", String(), false, processor);
   });
@@ -966,14 +1125,27 @@ void SetupAsyncServer() {
   });
 
   server.on("/edit.html", HTTP_GET,  [](AsyncWebServerRequest * request) {
-    request->send(200, "text/html", createEditForm(request->getParam(0)->value()));
+    // new version:
+    // Open file
+    // store file object in request->_tempObject
+    //request->send(200, "text/html", createEditForm(request->getParam(0)->value()));
+    const String filename = request->getParam(0)->value();
+    File file = SPIFFS.open("/" + filename, "r");
+    int state = 0;
+    request->send("text/html", 0, [state, file, filename](uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t  {
+      Serial.printf("******* send callback: %d %d %d\n", state, maxLen, index);
+      return streamEditForm(state, file, filename, (char *)buffer, maxLen, index);
+    });
   });
   server.on("/edit.html", HTTP_POST, [](AsyncWebServerRequest * request) {
     const char *ret = handleEditPost(request);
     if (ret == NULL)
       request->send(200, "text/html", "<html><head>ERROR</head><body><p>Something went wrong. Uploaded file is empty.</p></body></hhtml>");
-    else
-      request->send(200, "text/html", createEditForm(request->getParam(0)->value()));
+    else {
+      String f = request->getParam(0)->value();
+      request->redirect("/edit.html?file=" + f);
+      //request->send(200, "text/html", createEditForm(request->getParam(0)->value()));
+    }
   },
   NULL,
   [](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total) {
@@ -983,13 +1155,21 @@ void SetupAsyncServer() {
   // Route to load style.css file
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest * request) {
     AsyncWebServerResponse *response = request->beginResponse(SPIFFS, "/style.css", "text/css");
-    response->addHeader("Cache-Control","max-age=86400");
+    response->addHeader("Cache-Control", "max-age=86400");
     request->send(response);
   });
 
   // Route to set GPIO to HIGH
   server.on("/test.php", HTTP_POST, [](AsyncWebServerRequest * request) {
     request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  server.on("/live.kml", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "application/vnd.google-earth.kml+xml", createKMLLive(sonde.ipaddr.c_str()));
+  });
+
+  server.on("/dynamic.kml", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "application/vnd.google-earth.kml+xml", createKMLDynamic());
   });
 
   server.onNotFound([](AsyncWebServerRequest * request) {
@@ -1007,10 +1187,6 @@ void SetupAsyncServer() {
     }
   });
 
-  // Set up web socket
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
-
   // Start server
   server.begin();
 }
@@ -1021,18 +1197,10 @@ int fetchWifiIndex(const char *id) {
       Serial.printf("Match for %s at %d\n", id, i);
       return i;
     }
-    Serial.printf("No match: '%s' vs '%s'\n", id, networks[i].id.c_str());
+    //Serial.printf("No match: '%s' vs '%s'\n", id, networks[i].id.c_str());
     const char *cfgid = networks[i].id.c_str();
     int len = strlen(cfgid);
     if (strlen(id) > len) len = strlen(id);
-    Serial.print("SSID: ");
-    for (int i = 0; i < len; i++) {
-      Serial.printf("%02x ", id[i]);
-    } Serial.println("");
-    Serial.print("Conf: ");
-    for (int i = 0; i < len; i++) {
-      Serial.printf("%02x ", cfgid[i]);
-    } Serial.println("");
   }
   return -1;
 }
@@ -1138,10 +1306,40 @@ void unkHandler(T nmea) {
     if (*s == ',') return; /// no new course data
     int lastCourse = nmea.parseFloat(s, 0, NULL);
     Serial.printf("Course update: %d\n", lastCourse);
+  } else if (strcmp(nmea.getMessageID(), "GST") == 0) {
+    // get horizontal accuracy for android app on devices without gps
+    // GPGST,time,rms,-,-,-,stdlat,stdlon,stdalt,cs
+    const char *s = nmea.getSentence();
+    while (*s && *s != ',') s++;  // #0: GST
+    if (*s == ',') s++; else return;
+    while (*s && *s != ',') s++;  // #1: time: skip
+    if (*s == ',') s++; else return;
+    while (*s && *s != ',') s++;  // #1: rms: skip
+    if (*s == ',') s++; else return;
+    while (*s && *s != ',') s++;  // #1: (-): skip
+    if (*s == ',') s++; else return;
+    while (*s && *s != ',') s++;  // #1: (-): skip
+    if (*s == ',') s++; else return;
+    while (*s && *s != ',') s++;  // #1: (-): skip
+    if (*s == ',') s++; else return;
+    // stdlat
+    int stdlat = nmea.parseFloat(s, 1, NULL);
+    while (*s && *s != ',') s++;
+    if (*s == ',') s++; else return;
+    // stdlong
+    int stdlon = nmea.parseFloat(s, 1, NULL);
+    // calculate position error as 1-signma horizontal RMS
+    // I guess that is equivalent to Androids getAccurac()?
+    int poserr = 0;
+    if (stdlat < 10000 && stdlon < 10000) { // larger errors: no GPS fix, avoid overflow in *
+      poserr = (int)(sqrt(0.5 * (stdlat * stdlat + stdlon * stdlon)));
+    }
+    //Serial.printf("\nHorizontal accuracy: %d, %d => %.1fm\n", stdlat, stdlon, 0.1*poserr);
+    gpsPos.accuracy = poserr;
   }
 }
 
-#define DEBUG_GPS 0
+//#define DEBUG_GPS
 static bool gpsCourseOld;
 static int lastCourse;
 void gpsTask(void *parameter) {
@@ -1153,22 +1351,22 @@ void gpsTask(void *parameter) {
       //Serial.print(c);
       if (nmea.process(c)) {
         gpsPos.valid = nmea.isValid();
-	if(gpsPos.valid) {
-            gpsPos.lon = nmea.getLongitude()*0.000001;
-            gpsPos.lat = nmea.getLatitude()*0.000001;
-            long alt = 0;
-            nmea.getAltitude(alt);
-	    gpsPos.alt=(int)(alt/1000);
-            gpsPos.course = (int)(nmea.getCourse()/1000);
-            gpsCourseOld = false;
-            if(gpsPos.course==0) {
-                // either north or not new
-                if(lastCourse!=0) // use old value...
-                {
-                        gpsCourseOld = true;
-                        gpsPos.course = lastCourse;
-                }
-	    }
+        if (gpsPos.valid) {
+          gpsPos.lon = nmea.getLongitude() * 0.000001;
+          gpsPos.lat = nmea.getLatitude() * 0.000001;
+          long alt = 0;
+          nmea.getAltitude(alt);
+          gpsPos.alt = (int)(alt / 1000);
+          gpsPos.course = (int)(nmea.getCourse() / 1000);
+          gpsCourseOld = false;
+          if (gpsPos.course == 0) {
+            // either north or not new
+            if (lastCourse != 0) // use old value...
+            {
+              gpsCourseOld = true;
+              gpsPos.course = lastCourse;
+            }
+          }
         }
 #ifdef DEBUG_GPS
         uint8_t hdop = nmea.getHDOP();
@@ -1182,25 +1380,41 @@ void gpsTask(void *parameter) {
 
 #define UBX_SYNCH_1 0xB5
 #define UBX_SYNCH_2 0x62
-uint8_t ubx_set9k6[]={UBX_SYNCH_1, UBX_SYNCH_2, 0x06, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0xC0, 0x08, 0x00, 0x00, 0x80, 0x25, 0x00, 0x00, 0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8D, 0x8F};
-uint8_t ubx_factorydef[]={UBX_SYNCH_1, UBX_SYNCH_2, 0x06, 0x09, 13, 0, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0x17, 0x8A };
+uint8_t ubx_set9k6[] = {UBX_SYNCH_1, UBX_SYNCH_2, 0x06, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0xC0, 0x08, 0x00, 0x00, 0x80, 0x25, 0x00, 0x00, 0x03, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8D, 0x8F};
+uint8_t ubx_factorydef[] = {UBX_SYNCH_1, UBX_SYNCH_2, 0x06, 0x09, 13, 0, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0x17, 0x8A };
+uint8_t ubx_hardreset[] = {UBX_SYNCH_1, UBX_SYNCH_2, 0x06, 0x04, 4, 0, 0xff, 0xff, 0, 0, 0x0C, 0x5D };
+// GPGST: Class 0xF0 Id 0x07
+uint8_t ubx_enable_gpgst[] = {UBX_SYNCH_1, UBX_SYNCH_2, 0x06, 0x01, 3, 0, 0xF0, 0x07, 2, 0x03, 0x1F};
 
 void initGPS() {
   if (sonde.config.gps_rxd < 0) return; // GPS disabled
   if (sonde.config.gps_txd >= 0) {  // TX enable, thus try setting baud to 9600 and do a factory reset
-    Serial.println("Trying to reset GPS...");
-    Serial2.begin(115200, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
-    Serial2.write(ubx_set9k6, sizeof(ubx_set9k6));
-    delay(100);
-    Serial2.begin(38400, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
-    Serial2.write(ubx_set9k6, sizeof(ubx_set9k6));
-    delay(100);
-    Serial2.begin(19200, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
-    Serial2.write(ubx_set9k6, sizeof(ubx_set9k6));
-    delay(100);
-    Serial2.begin(9600, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
-    Serial2.write(ubx_factorydef, sizeof(ubx_factorydef));
-    delay(1000);
+    File testfile = SPIFFS.open("/GPSRESET", FILE_READ);
+    if (testfile && !testfile.isDirectory()) {
+      testfile.close();
+      Serial.println("GPS factory reset...");
+      Serial2.begin(115200, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
+      Serial2.write(ubx_set9k6, sizeof(ubx_set9k6));
+      delay(100);
+      Serial2.begin(38400, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
+      Serial2.write(ubx_set9k6, sizeof(ubx_set9k6));
+      delay(100);
+      Serial2.begin(19200, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
+      Serial2.write(ubx_set9k6, sizeof(ubx_set9k6));
+      delay(100);
+      Serial2.begin(9600, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
+      Serial2.write(ubx_factorydef, sizeof(ubx_factorydef));
+      delay(100);
+      Serial2.write(ubx_hardreset, sizeof(ubx_hardreset));
+      delay(5000);
+      SPIFFS.remove("/GPSRESET");
+    } else if (testfile) {
+      Serial.println("GPS reset file: not found/isdir");
+      testfile.close();
+      Serial2.begin(9600, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
+    }
+    // Enable GPGST messages
+    Serial2.write(ubx_enable_gpgst, sizeof(ubx_enable_gpgst));
   } else {
     Serial2.begin(9600, SERIAL_8N1, sonde.config.gps_rxd, sonde.config.gps_txd);
   }
@@ -1211,6 +1425,12 @@ void initGPS() {
                NULL);  /* task handle*/
 }
 
+const char *getStateStr(int what) {
+  if(what<0 || what>=(sizeof(mainStateStr)/sizeof(const char *)))
+    return "--";
+  else
+    return mainStateStr[what];
+}
 
 void sx1278Task(void *parameter) {
   /* new strategy:
@@ -1226,13 +1446,12 @@ void sx1278Task(void *parameter) {
   while (1) {
     if (rxtask.activate >= 128) {
       // activating sx1278 background task...
-      Serial.printf("rx task: activate=%d  mainstate=%d\n", rxtask.activate, rxtask.mainState);
+      Serial.printf("RXtask: start DECODER for sonde %d (was %s)\n", rxtask.activate&0x7f, getStateStr(rxtask.mainState));
       rxtask.mainState = ST_DECODER;
       rxtask.currentSonde = rxtask.activate & 0x7F;
-      Serial.println("rx task: calling sonde.setup()");
       sonde.setup();
     } else if (rxtask.activate != -1) {
-      Serial.printf("rx task: activate=%d  mainstate=%d\n", rxtask.activate, rxtask.mainState);
+      Serial.printf("RXtask: start %s (was %s)\n", getStateStr(rxtask.activate), getStateStr(rxtask.mainState));
       rxtask.mainState = rxtask.activate;
     }
     rxtask.activate = -1;
@@ -1480,7 +1699,7 @@ extern esp_err_t heap_caps_register_failed_alloc_callback(esp_alloc_failed_hook_
 
 void heap_caps_alloc_failed_hook(size_t requested_size, uint32_t caps, const char *function_name)
 {
-  printf("%s was called but failed to allocate %d bytes with 0x%X capabilities. \n",function_name, requested_size, caps);
+  printf("%s was called but failed to allocate %d bytes with 0x%X capabilities. \n", function_name, requested_size, caps);
 }
 #endif
 
@@ -1541,7 +1760,7 @@ void setup()
 
   // NOT TTGO v1 (fingerprint 64) or Heltec v1/v2 board (fingerprint 4)
   // and NOT TTGO Lora32 v2.1_1.6 (fingerprint 31/63)
-  if ( ( (sonde.fingerprint&(64+31)) != 31) && ((sonde.fingerprint & 16) == 16) ) {
+  if ( ( (sonde.fingerprint & (64 + 31)) != 31) && ((sonde.fingerprint & 16) == 16) ) {
     // FOr T-Beam 1.0
     for (int i = 0; i < 10; i++) { // try multiple times
       Wire.begin(21, 22);
@@ -1565,12 +1784,12 @@ void setup()
       axp.adc1Enable(AXP202_VBUS_VOL_ADC1, 1);
       axp.adc1Enable(AXP202_VBUS_CUR_ADC1, 1);
       axp.adc1Enable(AXP202_BATT_CUR_ADC1, 1);
-      if(sonde.config.button2_axp) {
+      if (sonde.config.button2_axp) {
         pinMode(PMU_IRQ, INPUT_PULLUP);
         attachInterrupt(PMU_IRQ, [] {
           pmu_irq = true;
         }, FALLING);
-      //axp.enableIRQ(AXP202_VBUS_REMOVED_IRQ | AXP202_VBUS_CONNECT_IRQ | AXP202_BATT_REMOVED_IRQ | AXP202_BATT_CONNECT_IRQ, 1);
+        //axp.enableIRQ(AXP202_VBUS_REMOVED_IRQ | AXP202_VBUS_CONNECT_IRQ | AXP202_BATT_REMOVED_IRQ | AXP202_BATT_CONNECT_IRQ, 1);
         axp.enableIRQ( AXP202_PEK_LONGPRESS_IRQ | AXP202_PEK_SHORTPRESS_IRQ, 1 );
         axp.clearIRQ();
       }
@@ -1626,7 +1845,7 @@ void setup()
   sonde.clearDisplay();
 
   setupWifiList();
-  Serial.printf("before disp.initFromFile... layouts is %p", disp.layouts);
+  Serial.printf("before disp.initFromFile... layouts is %p\n", disp.layouts);
 
   disp.initFromFile(sonde.config.screenfile);
   Serial.printf("disp.initFromFile... layouts is %p", disp.layouts);
@@ -1780,39 +1999,47 @@ static const char *action2text(uint8_t action) {
 #define RDZ_DATA_LEN 128
 
 void parseGpsJson(char *data) {
-    char *key = NULL;
-    char *value = NULL;
-    // very simple json parser: look for ", then key, then ", then :, then number, then , or } or \0
-    for(int i=0; i<RDZ_DATA_LEN; i++) {
-	if(key==NULL) {
-	     if(data[i]!='"') continue;
-	     key=data+i+1;
-	     i+=2;
-	     continue;
-	} 
-	if(value==NULL) {
-	     if(data[i]!=':') continue;
-	     value = data+i+1;
-	     i += 2;
-	     continue;
-	}
-	if(data[i]==',' || data[i]=='}' || data[i]==0) {
-	     // get value
-	     double val = strtod(value,NULL);
-	     // get data
-	     if(strncmp(key,"lat",3)==0) { gpsPos.lat = val; }
-	     else if(strncmp(key,"lon",3)==0) { gpsPos.lon = val; }
-	     else if(strncmp(key,"alt",3)==0) { gpsPos.alt = (int)val; }
-	     else if(strncmp(key,"course",6)==0) { gpsPos.course = (int)val; }
-	     gpsPos.valid = true;
-
-	     // next item:
-	     if(data[i]!=',') break;
-	     key = NULL;
-	     value = NULL;
-	}
+  char *key = NULL;
+  char *value = NULL;
+  // very simple json parser: look for ", then key, then ", then :, then number, then , or } or \0
+  for (int i = 0; i < RDZ_DATA_LEN; i++) {
+    if (key == NULL) {
+      if (data[i] != '"') continue;
+      key = data + i + 1;
+      i += 2;
+      continue;
     }
-    Serial.printf("Parse result: lat=%f, lon=%f, alt=%d, valid=%d\n", gpsPos.lat, gpsPos.lon, gpsPos.alt, gpsPos.valid);
+    if (value == NULL) {
+      if (data[i] != ':') continue;
+      value = data + i + 1;
+      i += 2;
+      continue;
+    }
+    if (data[i] == ',' || data[i] == '}' || data[i] == 0) {
+      // get value
+      double val = strtod(value, NULL);
+      // get data
+      if (strncmp(key, "lat", 3) == 0) {
+        gpsPos.lat = val;
+      }
+      else if (strncmp(key, "lon", 3) == 0) {
+        gpsPos.lon = val;
+      }
+      else if (strncmp(key, "alt", 3) == 0) {
+        gpsPos.alt = (int)val;
+      }
+      else if (strncmp(key, "course", 6) == 0) {
+        gpsPos.course = (int)val;
+      }
+      gpsPos.valid = true;
+
+      // next item:
+      if (data[i] != ',') break;
+      key = NULL;
+      value = NULL;
+    }
+  }
+  Serial.printf("Parse result: lat=%f, lon=%f, alt=%d, valid=%d\n", gpsPos.lat, gpsPos.lon, gpsPos.alt, gpsPos.valid);
 }
 
 static char rdzData[RDZ_DATA_LEN];
@@ -1827,9 +2054,9 @@ void loopDecoder() {
   // TODO: update displayed sonde?
 
   if (action != ACT_NONE) {
-    Serial.printf("Loop: triggering action %s (%d)\n", action2text(action), action);
-    action = sonde.updateState(action);
-    Serial.printf("Loop: action is %d, sonde index is %d\n", action, sonde.currentSonde);
+    int newact = sonde.updateState(action);
+    Serial.printf("MAIN: loopDecoder: action %s (%d) => %d  [current: main=%d, rxtask=%d]\n", action2text(action), action, newact, sonde.currentSonde, rxtask.currentSonde);
+    action = newact;
     if (action != 255) {
       if (action == ACT_DISPLAY_SPECTRUM) {
         enterMode(ST_SPECTRUM);
@@ -1839,10 +2066,7 @@ void loopDecoder() {
         enterMode(ST_WIFISCAN);
         return;
       }
-      // no... we are already in DECODER mode, so no need to do anything!?
-      //else if (action == ACT_NEXTSONDE) enterMode(ST_DECODER); // update rx background task
     }
-    Serial.printf("current main is %d, current rxtask is %d\n", sonde.currentSonde, rxtask.currentSonde);
   }
 
   if (!tncclient.connected()) {
@@ -1859,33 +2083,24 @@ void loopDecoder() {
     }
     Serial.println("");
   }
-#if 0
-  if (!rdzclient.connected()) {
-    rdzclient = rdzserver.available();
-    if(rdzclient.connected()) {
-      Serial.println("RDZ JSON socket: new connection");
-    }
-  }
-#else
   if (rdzserver.hasClient()) {
     Serial.println("TCP JSON socket: new connection");
-    if(rdzclient) rdzclient.stop();
+    if (rdzclient) rdzclient.stop();
     rdzclient = rdzserver.available();
   }
-#endif
-  if(rdzclient.available()) {
+  if (rdzclient.available()) {
     Serial.print("RDZ JSON socket: received ");
-    while(rdzclient.available()) {
+    while (rdzclient.available()) {
       char c = (char)rdzclient.read();
       Serial.print(c);
-      if(c=='\n'||c=='}'||rdzDataPos>=RDZ_DATA_LEN) {
+      if (c == '\n' || c == '}' || rdzDataPos >= RDZ_DATA_LEN) {
         // parse GPS position from phone
-	rdzData[rdzDataPos] = c;
-	if(rdzDataPos>2) parseGpsJson(rdzData);
-	rdzDataPos = 0;
+        rdzData[rdzDataPos] = c;
+        if (rdzDataPos > 2) parseGpsJson(rdzData);
+        rdzDataPos = 0;
       }
       else {
-         rdzData[rdzDataPos++] = c;
+        rdzData[rdzDataPos++] = c;
       }
     }
     Serial.println("");
@@ -1915,82 +2130,104 @@ void loopDecoder() {
         tncclient.write(raw, rawlen);
       }
     }
-  
+    if (sonde.config.sondehub.active) {
+	    sondehub_send_data(&shclient, s, &sonde.config.sondehub);
+    }
+  }
 
     // send to MQTT if enabled
     if (connected && mqttEnabled) {
       Serial.println("Sending sonde info via MQTT");
       mqttclient.publishPacket(s);
     }
-
-    // also send to web socket
-    //TODO
-  }
+  //}
   // always send data, even if not valid....
   if (rdzclient.connected()) {
-        Serial.println("Sending position via TCP as rdzJSON");
-        char raw[1024];
-	const char *typestr = s->typestr;
-	if(*typestr==0) typestr = sondeTypeStr[s->type];
-        int len = snprintf(raw, 1024, "{"
-	"\"res\": %d,"
-	"\"type\": \"%s\","
-        "\"active\": %d,"
-        "\"freq\": %.2f,"
-        "\"id\": \"%s\","
-        "\"ser\": \"%s\","
-        "\"validId\": %d,"
-        "\"launchsite\": \"%s\","
-        "\"lat\": %.5f,"
-        "\"lon\": %.5f,"
-        "\"alt\": %.1f,"
-        "\"vs\": %.1f,"
-        "\"hs\": %.1f,"
-        "\"dir\": %.1f,"
-        "\"sats\": %d,"
-        "\"validPos\": %d,"
-        "\"time\": %d,"
-        "\"sec\": %d,"
-        "\"frame\": %d,"
-        "\"validTime\": %d,"
-        "\"rssi\": %d,"
-        "\"afc\": %d,"
-        "\"launchKT\": %d,"
-        "\"burstKT\": %d,"
-        "\"countKT\": %d,"
-        "\"crefKT\": %d"
-        "}\n",
-	res&0xff,
-	typestr,
-        (int)s->active,
-        s->freq,
-        s->id,
-        s->ser,
-        (int)s->validID,
-        s->launchsite,
-        s->lat,
-        s->lon,
-        s->alt,
-        s->vs,
-        s->hs,
-        s->dir,
-        s->sats,
-        s->validPos,
-        s->time,
-        s->sec,
-        s->frame,
-        (int)s->validTime,
-        s->rssi,
-        s->afc,
-        s->launchKT,
-        s->burstKT,
-        s->countKT,
-        s->crefKT
-        );
-
-        rdzclient.write(raw, len>1024?1024:len);
+    Serial.println("Sending position via TCP as rdzJSON");
+    char raw[1024];
+    char gps[128];
+    const char *typestr = s->typestr;
+    if (*typestr == 0) typestr = sondeTypeStr[s->type];
+    // TODO: only if GPS is valid...
+    if (gpsPos.valid) {
+      snprintf(gps, 128, ", \"gpslat\": %f,"
+               "\"gpslon\": %f,"
+               "\"gpsalt\": %d,"
+               "\"gpsacc\": %d,"
+               "\"gpsdir\": %d",
+               gpsPos.lat, gpsPos.lon, gpsPos.alt, gpsPos.accuracy, gpsPos.course);
+    } else {
+      *gps = 0;
+    }
+    //
+    int len = snprintf(raw, 1024, "{"
+                       "\"res\": %d,"
+                       "\"type\": \"%s\","
+                       "\"active\": %d,"
+                       "\"freq\": %.2f,"
+                       "\"id\": \"%s\","
+                       "\"ser\": \"%s\","
+                       "\"validId\": %d,"
+                       "\"launchsite\": \"%s\","
+                       "\"lat\": %.5f,"
+                       "\"lon\": %.5f,"
+                       "\"alt\": %.1f,"
+                       "\"vs\": %.1f,"
+                       "\"hs\": %.1f,"
+                       "\"dir\": %.1f,"
+                       "\"sats\": %d,"
+                       "\"validPos\": %d,"
+                       "\"time\": %d,"
+                       "\"sec\": %d,"
+                       "\"frame\": %d,"
+                       "\"validTime\": %d,"
+                       "\"rssi\": %d,"
+                       "\"afc\": %d,"
+                       "\"launchKT\": %d,"
+                       "\"burstKT\": %d,"
+                       "\"countKT\": %d,"
+                       "\"crefKT\": %d"
+                       "%s"
+                       "}\n",
+                       res & 0xff,
+                       typestr,
+                       (int)s->active,
+                       s->freq,
+                       s->id,
+                       s->ser,
+                       (int)s->validID,
+                       s->launchsite,
+                       s->lat,
+                       s->lon,
+                       s->alt,
+                       s->vs,
+                       s->hs,
+                       s->dir,
+                       s->sats,
+                       s->validPos,
+                       s->time,
+                       s->sec,
+                       s->frame,
+                       (int)s->validTime,
+                       s->rssi,
+                       s->afc,
+                       s->launchKT,
+                       s->burstKT,
+                       s->countKT,
+                       s->crefKT,
+                       gps
+                      );
+    //Serial.println("Writing rdzclient...");
+    if (len > 1024) len = 1024;
+    int wlen = rdzclient.write(raw, len);
+    if (wlen != len) {
+      Serial.println("Writing rdzClient not OK, closing connection");
+      rdzclient.stop();
+      rdzclient = NULL;
+    }
+    //Serial.println("Writing rdzclient OK");
   }
-  Serial.print("updateDisplay started... ");
+  Serial.print("MAIN: updateDisplay started\n");
   if (forceReloadScreenConfig) {
     disp.initFromFile(sonde.config.screenfile);
     sonde.clearDisplay();
@@ -1998,7 +2235,7 @@ void loopDecoder() {
   }
   int t = millis();
   sonde.updateDisplay();
-  Serial.printf("updateDisplay done (after %d ms)\n", (int)(millis() - t));
+  Serial.printf("MAIN: updateDisplay done (after %d ms)\n", (int)(millis() - t));
 }
 
 void setCurrentDisplay(int value) {
@@ -2029,6 +2266,13 @@ void loopSpectrum() {
 
   scanner.scan();
   scanner.plotResult();
+  
+/*
+  if(globalClient != NULL && globalClient->status() == WS_CONNECTED){
+      String randomNumber = String(random(0,20));
+      globalClient->text(randomNumber);
+   }
+*/
 
   if (sonde.config.spectrum > 0) {
     int remaining = sonde.config.spectrum - (millis() - specTimer) / 1000;
@@ -2073,6 +2317,9 @@ String translateEncryptionType(wifi_auth_mode_t encryptionType) {
   }
 }
 
+enum t_wifi_state { WIFI_DISABLED, WIFI_SCAN, WIFI_CONNECT, WIFI_CONNECTED, WIFI_APMODE };
+
+static t_wifi_state wifi_state = WIFI_DISABLED;
 
 void enableNetwork(bool enable) {
   if (enable) {
@@ -2086,23 +2333,22 @@ void enableNetwork(bool enable) {
       tncserver.begin();
       rdzserver.begin();
     }
-    
+
     if (sonde.config.mqtt.active && strlen(sonde.config.mqtt.host) > 0) {
       mqttEnabled = true;
       mqttclient.init(sonde.config.mqtt.host, sonde.config.mqtt.port, sonde.config.mqtt.id, sonde.config.mqtt.username, sonde.config.mqtt.password, sonde.config.mqtt.prefix);
     }
 
+	  if (sonde.config.sondehub.active && wifi_state != WIFI_APMODE) {
+      sondehub_station_update(&shclient, &sonde.config.sondehub);
+    }
+	  
     connected = true;
   } else {
     MDNS.end();
     connected = false;
   }
 }
-
-
-enum t_wifi_state { WIFI_DISABLED, WIFI_SCAN, WIFI_CONNECT, WIFI_CONNECTED, WIFI_APMODE };
-
-static t_wifi_state wifi_state = WIFI_DISABLED;
 
 // Events used only for debug output right now
 void WiFiEvent(WiFiEvent_t event)
@@ -2375,19 +2621,12 @@ void loopWifiScan() {
   int index = -1;
   int n = WiFi.scanNetworks();
   for (int i = 0; i < n; i++) {
-    Serial.print("Network name: ");
     String ssid = WiFi.SSID(i);
-    Serial.println(ssid);
     disp.rdis->drawString(0, dispys * (1 + line), ssid.c_str());
     line = (line + 1) % (disph / dispys);
-    Serial.print("Signal strength: ");
-    Serial.println(WiFi.RSSI(i));
-    Serial.print("MAC address: ");
-    Serial.println(WiFi.BSSIDstr(i));
-    Serial.print("Encryption type: ");
+    String mac = WiFi.BSSIDstr(i);
     String encryptionTypeDescription = translateEncryptionType(WiFi.encryptionType(i));
-    Serial.println(encryptionTypeDescription);
-    Serial.println("-----------------------");
+    Serial.printf("Network %s: RSSI %d, MAC %s, enc: %s\n", ssid.c_str(), WiFi.RSSI(i), mac.c_str(), encryptionTypeDescription.c_str());
     int curidx = fetchWifiIndex(ssid.c_str());
     if (curidx >= 0 && index == -1) {
       index = curidx;
@@ -2625,8 +2864,8 @@ void execOTA() {
 
 
 void loop() {
-  Serial.printf("\nRunning main loop in state %d [currentDisp:%d, lastDiso:%d]. free heap: %d;\n",
-                mainState, currentDisplay, lastDisplay, ESP.getFreeHeap());
+  Serial.printf("\nMAIN: Running loop in state %d [currentDisp:%d, lastDisp:%d]. free heap: %d, unused stack: %d\n",
+                mainState, currentDisplay, lastDisplay, ESP.getFreeHeap(), uxTaskGetStackHighWaterMark(0));
   switch (mainState) {
     case ST_DECODER:
 #ifndef DISABLE_MAINRX
@@ -2663,5 +2902,166 @@ void loop() {
     lastMqttUptime = now;
   }
 
-  Serial.printf("Unused stack: %d\n", uxTaskGetStackHighWaterMark(0));
 }
+
+// Sondehub v2 DB related codes
+
+/*
+ *	Update station data to the sondehub v2 DB
+ */
+void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
+	char data[300];	
+	
+	Serial.println("sondehub_station_update()");
+	
+	if (!client->connected()) {
+		if (!client->connect(conf->host, 80)) {
+			Serial.println("Connection FAILED");
+			return;
+		}
+	}
+
+	client->println("PUT /listeners HTTP/1.1");
+    client->print("Host: ");
+	client->println(conf->host);
+	client->println("accept: text/plain");
+	client->println("Content-Type: application/json");
+	client->print("Content-Length: ");
+	sprintf(data, 
+			"{"
+			"\"software_name\": \"%s\","
+			"\"software_version\": \"%s\","
+			"\"uploader_callsign\": \"%s\","
+			"\"uploader_contact_email\": \"%s\","
+			"\"uploader_position\": [%s,%s,%s],"
+			"\"uploader_antenna\": \"%s\""
+			"}", 
+			version_name, version_id, conf->callsign, conf->email, conf->lat, conf->lon, conf->alt, conf->antenna);
+	client->println(strlen(data));
+    client->println();
+    client->println(data);
+	Serial.println(strlen(data));
+	Serial.println(data);
+    String response = client->readString();
+	Serial.println(response);
+	client->stop();
+}
+
+/*
+ *	Update sonde data to the sondehub v2 DB
+ */
+void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *conf) {
+	Serial.println("sondehub_send_data()");
+
+#define MSG_SIZE 550
+	char rs_msg[MSG_SIZE];
+	char *w;
+	struct tm ts;
+	time_t t = s->time;
+	
+	if (String(s->ser) == "") return;	// Don't send anything without serial number
+
+  if (((int)s->lat == 0) && ((int)s->lon == 0)) return;	// Sometimes these values are zeroes. Don't send those to the sondehub
+
+  if ((int)s->alt > 50000) return;	// If alt is too high don't send to SondeHub
+
+  if ((int)s->sats < 4) return;	// If not enough sats don't send to SondeHub
+	
+  if (String(sondeTypeStr[s->type]) == "RS41" || String(sondeTypeStr[s->type]) == "RS92" || String(sondeTypeStr[s->type]) == "M10" || String(sondeTypeStr[s->type]) == "M20") {
+    t += 18;	// convert back to GPS time from UTC time +18s
+  }
+
+	ts = *gmtime(&t);
+
+  memset(rs_msg, 0, MSG_SIZE);
+	w=rs_msg;
+
+  if (((int)s->temperature != 0) && ((int)s->relativeHumidity != 0)) {
+    sprintf(w,
+      "[ {"
+      "\"software_name\": \"%s\","
+      "\"software_version\": \"%s\","
+      "\"uploader_callsign\": \"%s\"," 
+      "\"time_received\": \"%04d-%02d-%02dT%02d:%02d:%02d.000Z\"," 
+      "\"manufacturer\": \"%s\","
+      "\"type\": \"%s\","
+      "\"serial\": \"%s\"," 
+      "\"frame\": %d," 
+      "\"datetime\": \"%04d-%02d-%02dT%02d:%02d:%02d.000Z\"," 
+      "\"lat\": %.6f," 
+      "\"lon\": %.6f," 
+      "\"alt\": %.2f," 
+      "\"frequency\": %.3f," 
+      "\"vel_h\": %.1f," 
+      "\"vel_v\": %.1f," 
+      "\"heading\": %.1f," 
+      "\"sats\": %d,"
+      "\"rssi\": %.1f,"
+      "\"temp\": %.2f,"
+      "\"humidity\": %.2f,"
+      "\"uploader_position\": [ %s, %s, %s ]," 
+      "\"uploader_antenna\": \"%s\""
+      "}]",
+      version_name, version_id, conf->callsign, 
+      ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec + s->sec,
+      manufacturer_string[s->type], sondeTypeStr[s->type], s->ser, s->frame, 
+      ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec + s->sec,
+      (float)s->lat, (float)s->lon, (float)s->alt, (float)s->freq, (float)s->hs, (float)s->vs,
+      (float)s->dir, (int)s->sats, -((float)s->rssi/2), float(s->temperature), float(s->relativeHumidity), conf->lat, conf->lon, conf->alt, conf->antenna
+    );
+  } 
+  else {
+    sprintf(w,
+      "[ {"
+      "\"software_name\": \"%s\","
+      "\"software_version\": \"%s\","
+      "\"uploader_callsign\": \"%s\"," 
+      "\"time_received\": \"%04d-%02d-%02dT%02d:%02d:%02d.000Z\"," 
+      "\"manufacturer\": \"%s\","
+      "\"type\": \"%s\","
+      "\"serial\": \"%s\"," 
+      "\"frame\": %d," 
+      "\"datetime\": \"%04d-%02d-%02dT%02d:%02d:%02d.000Z\"," 
+      "\"lat\": %.6f," 
+      "\"lon\": %.6f," 
+      "\"alt\": %.2f," 
+      "\"frequency\": %.3f," 
+      "\"vel_h\": %.1f," 
+      "\"vel_v\": %.1f," 
+      "\"heading\": %.1f," 
+      "\"sats\": %d,"
+      "\"rssi\": %.1f,"
+      "\"uploader_position\": [ %s, %s, %s ]," 
+      "\"uploader_antenna\": \"%s\""
+      "}]",
+      version_name, version_id, conf->callsign, 
+      ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec + s->sec,
+      manufacturer_string[s->type], sondeTypeStr[s->type], s->ser, s->frame, 
+      ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday, ts.tm_hour, ts.tm_min, ts.tm_sec + s->sec,
+      (float)s->lat, (float)s->lon, (float)s->alt, (float)s->freq, (float)s->hs, (float)s->vs,
+      (float)s->dir, (int)s->sats, -((float)s->rssi/2), conf->lat, conf->lon, conf->alt, conf->antenna
+    );
+  }
+	
+	if (!client->connected()) {
+		Serial.println("NO CONNECTION");
+		if (!client->connect(conf->host, 80)) {
+			Serial.println("Connection FAILED");
+			return;
+		}
+	}
+
+	client->println("PUT /sondes/telemetry HTTP/1.1");
+    client->print("Host: ");
+	client->println(conf->host);
+	client->println("accept: text/plain");
+	client->println("Content-Type: application/json");
+	client->print("Content-Length: ");
+	client->println(strlen(w));
+    client->println();
+    client->println(w);
+	Serial.println(w);
+    String response = client->readString();
+	Serial.println(response);
+}
+// End of sondehub v2 related codes
