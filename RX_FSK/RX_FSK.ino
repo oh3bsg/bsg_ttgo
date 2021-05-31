@@ -1172,6 +1172,10 @@ void SetupAsyncServer() {
     request->send(200, "application/vnd.google-earth.kml+xml", createKMLDynamic());
   });
 
+  server.on("/sonde_monitor", HTTP_GET, [](AsyncWebServerRequest * request) {
+    request->send(200, "text/json", create_monitor_data());
+  });
+
   server.onNotFound([](AsyncWebServerRequest * request) {
     if (request->method() == HTTP_OPTIONS) {
       request->send(200);
@@ -3065,3 +3069,48 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
 	Serial.println(response);
 }
 // End of sondehub v2 related codes
+
+/*
+{ "sonde":{"id":"S1234567","position":[61.123456,21.123456,160.2],"rssi":-105.5},
+  "gps":{"position":[61.123456,21.123456,160.2],"direction":180}
+}
+*/
+
+const char *create_monitor_data() {
+	char *ptr = message;
+	
+	for (int i = 0; i < sonde.nSonde; i++) {
+		int snum = (i + sonde.currentSonde) % sonde.nSonde;
+		if (sonde.sondeList[snum].active && sonde.sondeList[snum].validID) {
+			sprintf(ptr, 
+			        "{\"sonde\":{\"id\":\"%s\",\"position\":[%.6f,%.6f,%.1f],\"rssi\":%.1f},"
+					"\"gps\":{\"position\":[%.6f,%.6f,%.1f],\"direction\":%d}}", 
+					sonde.sondeList[snum].ser, sonde.sondeList[snum].lat, sonde.sondeList[snum].lon, sonde.sondeList[snum].alt, -((float)sonde.sondeList[snum].rssi/2),
+					61.570243, 23.518799, 160.2, 180
+					);
+			return message;
+		}
+	}
+
+	sprintf(ptr, 
+	        "{\"sonde\":{\"id\":\"%s\",\"position\":[%.6f,%.6f,%.1f],\"rssi\":%.1f},"
+			"\"gps\":{\"position\":[%.6f,%.6f,%.1f],\"direction\":%d}}", 
+			"", 0.0, 0.0, 0.0, -125.0,
+			61.570243, 23.518799, 160.2, 180
+			);
+	return message;
+
+/* Versio 1
+	for (int i = 0; i < sonde.nSonde; i++) {
+		int snum = (i + sonde.currentSonde) % sonde.nSonde;
+		if (sonde.sondeList[snum].active && sonde.sondeList[snum].validID) {
+				sprintf(ptr, "{\"sonde_id\":\"%s\", \"lat\": %.6f, \"lon\": %.6f, \"alt\": %.1f, \"RSSI\": %.1f}", 
+					sonde.sondeList[snum].ser, sonde.sondeList[snum].lat, sonde.sondeList[snum].lon, sonde.sondeList[snum].alt, -((float)sonde.sondeList[snum].rssi/2));
+				return message;
+		}
+	}
+
+	sprintf(ptr, "{}");
+	return message;
+*/
+}
