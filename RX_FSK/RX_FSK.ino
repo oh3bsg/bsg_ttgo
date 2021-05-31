@@ -595,6 +595,7 @@ struct st_configitems config_list[] = {
   /* Sondehub v2 settings */
   {"", "Sondehub v2 settings", -5, NULL},
   {"sondehub.active", "Sondehub reporting active", 0, &sonde.config.sondehub.active},
+  {"sondehub.chase", "Sondehub chase location active", 0, &sonde.config.sondehub.chase},
   {"sondehub.host", "Sondehub host", 63, &sonde.config.sondehub.host},
   {"sondehub.callsign", "Callsign", 63, &sonde.config.sondehub.callsign},
   {"sondehub.lat", "Latitude", 19, &sonde.config.sondehub.lat},
@@ -3052,12 +3053,26 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
            );
     w += strlen(w);
   }
-  sprintf(w,
-          "\"uploader_position\": [ %s, %s, %s ],"
-          "\"uploader_antenna\": \"%s\""
-          "}]",
-          conf->lat, conf->lon, conf->alt, conf->antenna
-         );
+
+  if (conf->chase == 0) {
+    sprintf(w,
+            "\"uploader_position\": [ %s, %s, %s ],"
+            "\"uploader_antenna\": \"%s\""
+            "}]",
+            conf->lat, conf->lon, conf->alt, conf->antenna
+          );
+  }
+  else if (gpsPos.valid) {
+    sprintf(w,
+            "\"uploader_position\": [ %.6f, %.6f, %d ],"
+            "\"mobile\": \"true\""
+            "}]",
+            gpsPos.lat, gpsPos.lon, gpsPos.alt
+          );
+  }
+  else {
+    sprintf(w, "}]");
+  }
 
   client->println("PUT /sondes/telemetry HTTP/1.1");
   client->print("Host: ");
