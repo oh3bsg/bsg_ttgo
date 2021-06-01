@@ -2946,6 +2946,7 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
           "\"uploader_antenna\": \"%s\""
           "}",
           version_name, version_id, conf->callsign, conf->email, conf->lat, conf->lon, conf->alt, conf->antenna);
+  //add code here to use GPS and set mobile flag
   client->println(strlen(data));
   client->println();
   client->println(data);
@@ -3065,9 +3066,9 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
   else if (gpsPos.valid) {
     sprintf(w,
             "\"uploader_position\": [ %.6f, %.6f, %d ],"
-            "\"mobile\": \"true\""
+            "\"uploader_antenna\": \"%s\""
             "}]",
-            gpsPos.lat, gpsPos.lon, gpsPos.alt
+            gpsPos.lat, gpsPos.lon, gpsPos.alt, conf->antenna
           );
   }
   else {
