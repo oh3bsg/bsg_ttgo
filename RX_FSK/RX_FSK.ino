@@ -2941,12 +2941,28 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
           "\"software_name\": \"%s\","
           "\"software_version\": \"%s\","
           "\"uploader_callsign\": \"%s\","
-          "\"uploader_contact_email\": \"%s\","
-          "\"uploader_position\": [%s,%s,%s],"
-          "\"uploader_antenna\": \"%s\""
-          "}",
-          version_name, version_id, conf->callsign, conf->email, conf->lat, conf->lon, conf->alt, conf->antenna);
-  //add code here to use GPS and set mobile flag
+          "\"uploader_contact_email\": \"%s\",",
+          version_name, version_id, conf->callsign, conf->email);
+  if (conf->chase == 0) {
+    sprintf(data,
+            "\"uploader_position\": [ %s, %s, %s ],"
+            "\"uploader_antenna\": \"%s\""
+            "}",
+            conf->lat, conf->lon, conf->alt, conf->antenna
+          );
+  }
+  else if (gpsPos.valid) {
+    sprintf(data,
+            "\"uploader_position\": [ %.6f, %.6f, %d ],"
+            "\"uploader_antenna\": \"%s\""
+            "\"mobile\": \"true\""
+            "}",
+            gpsPos.lat, gpsPos.lon, gpsPos.alt, conf->antenna
+          );
+  }
+  else {
+    sprintf(data, "}");
+  }
   client->println(strlen(data));
   client->println();
   client->println(data);
