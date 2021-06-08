@@ -3023,6 +3023,8 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
     Serial.println("Previous SH-frame not yet ack'ed, not sending new data");
     return;
   }
+  
+  //if it has been 30s since last station_update and gpsPos.valid is true call sondehub_station_update
 
   if ( s->type == STYPE_RS41 || s->type == STYPE_RS92 || s->type == STYPE_M10 || s->type == STYPE_M20 ) {
     t += 18;	// convert back to GPS time from UTC time +18s
