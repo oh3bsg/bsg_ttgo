@@ -2919,7 +2919,9 @@ void loop() {
  	Update station data to the sondehub v2 DB
 */
 void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
-  char data[300];
+  #define DATA_SIZE 300
+  char data_msg[DATA_SIZE];
+  char *data;
 
   Serial.println("sondehub_station_update()");
 
@@ -2929,6 +2931,9 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
       return;
     }
   }
+
+  memset(data_msg, 0, DATA_SIZE);
+  data = data_msg;
 
   client->println("PUT /listeners HTTP/1.1");
   client->print("Host: ");
@@ -2943,6 +2948,7 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
           "\"uploader_callsign\": \"%s\","
           "\"uploader_contact_email\": \"%s\",",
           version_name, version_id, conf->callsign, conf->email);
+  data += strlen(data);
   if (conf->chase == 0) {
     sprintf(data,
             "\"uploader_position\": [ %s, %s, %s ],"
@@ -2951,7 +2957,7 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
             conf->lat, conf->lon, conf->alt, conf->antenna
           );
   }
-  else if (gpsPos.valid) {
+  else if (gpsPos.valid && gpsPos.lat != 0 && gpsPos.lon != 0) {
     sprintf(data,
             "\"uploader_position\": [ %.6f, %.6f, %d ],"
             "\"uploader_antenna\": \"%s\""
@@ -2963,11 +2969,11 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
   else {
     sprintf(data, "}");
   }
-  client->println(strlen(data));
+  client->println(strlen(data_msg));
   client->println();
-  client->println(data);
-  Serial.println(strlen(data));
-  Serial.println(data);
+  client->println(data_msg);
+  Serial.println(strlen(data_msg));
+  Serial.println(data_msg);
   String response = client->readString();
   Serial.println(response);
   client->stop();
@@ -3081,7 +3087,7 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
             conf->lat, conf->lon, conf->alt, conf->antenna
           );
   }
-  else if (gpsPos.valid) {
+  else if (gpsPos.valid && gpsPos.lat != 0 && gpsPos.lon != 0) {
     sprintf(w,
             "\"uploader_position\": [ %.6f, %.6f, %d ],"
             "\"uploader_antenna\": \"%s\""
