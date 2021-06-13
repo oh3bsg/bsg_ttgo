@@ -51,7 +51,12 @@ boolean connected = false;
 WiFiUDP udp;
 WiFiClient client;
 #if FEATURE_SONDEHUB
+#define SONDEHUB_STATION_UPDATE_TIME (60*60*1000) // 60 min
+#define SONDEHUB_MOBILE_STATION_UPDATE_TIME (30*1000) // 30 sec
 WiFiClient shclient;	// Sondehub v2
+unsigned long time_now = 0;
+unsigned long time_last_update = 0;
+unsigned long time_delta = 0;
 #endif
 
 // KISS over TCP for communicating with APRSdroid
@@ -2135,6 +2140,22 @@ void loopDecoder() {
     }
 #if FEATURE_SONDEHUB
     if (sonde.config.sondehub.active) {
+      time_now = millis();
+      if (time_now < time_last_update) {
+        // counter overflow
+        time_delta = SONDEHUB_STATION_UPDATE_TIME;
+      }
+      else {
+        time_delta = time_now - time_last_update;
+      }
+      if ((sonde.config.sondehub.chase == 0) && (time_delta >= SONDEHUB_STATION_UPDATE_TIME)) {  // 60 min
+        sondehub_station_update(&shclient, &sonde.config.sondehub);
+        time_last_update = time_now;
+      }
+      else if ((sonde.config.sondehub.chase == 1) && (time_delta >= SONDEHUB_MOBILE_STATION_UPDATE_TIME)) {  // 30 sec
+        sondehub_station_update(&shclient, &sonde.config.sondehub);
+        time_last_update = time_now;
+      }
       sondehub_send_data(&shclient, s, &sonde.config.sondehub);
     }
 #endif
@@ -2349,6 +2370,7 @@ void enableNetwork(bool enable) {
 #if FEATURE_SONDEHUB
     if (sonde.config.sondehub.active && wifi_state != WIFI_APMODE) {
       sondehub_station_update(&shclient, &sonde.config.sondehub);
+      time_last_update = millis();
     }
 #endif
     connected = true;
@@ -2919,7 +2941,9 @@ void loop() {
  	Update station data to the sondehub v2 DB
 */
 void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
-  char data[300];
+#define STATION_DATA_LEN 300
+  char data[STATION_DATA_LEN];
+  char *w;
 
   Serial.println("sondehub_station_update()");
 
@@ -2929,6 +2953,34 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
       return;
     }
   }
+  w = data;
+  memset(w, 0, STATION_DATA_LEN);
+
+  sprintf(w,
+          "{"
+          "\"software_name\": \"%s\","
+          "\"software_version\": \"%s\","
+          "\"uploader_callsign\": \"%s\","
+          "\"uploader_contact_email\": \"%s\",",
+          version_name, version_id, conf->callsign, conf->email);
+  w += strlen(w);
+  if (conf->chase == 0) {
+    sprintf(w,
+            "\"uploader_position\": [%s,%s,%s],"
+            "\"uploader_antenna\": \"%s\""
+            "}",
+            conf->lat, conf->lon, conf->alt, conf->antenna);
+  }
+  else if (gpsPos.valid) {
+    sprintf(w,
+            "\"uploader_position\": [%.6f, %.6f, %d],"
+            "\"mobile\": \"true\""
+            "}",
+            gpsPos.lat, gpsPos.lon, gpsPos.alt);
+  }
+  else {
+    return;
+  }
 
   client->println("PUT /listeners HTTP/1.1");
   client->print("Host: ");
@@ -2936,16 +2988,6 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
   client->println("accept: text/plain");
   client->println("Content-Type: application/json");
   client->print("Content-Length: ");
-  sprintf(data,
-          "{"
-          "\"software_name\": \"%s\","
-          "\"software_version\": \"%s\","
-          "\"uploader_callsign\": \"%s\","
-          "\"uploader_contact_email\": \"%s\","
-          "\"uploader_position\": [%s,%s,%s],"
-          "\"uploader_antenna\": \"%s\""
-          "}",
-          version_name, version_id, conf->callsign, conf->email, conf->lat, conf->lon, conf->alt, conf->antenna);
   client->println(strlen(data));
   client->println();
   client->println(data);
@@ -2953,7 +2995,7 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
   Serial.println(data);
   String response = client->readString();
   Serial.println(response);
-  client->stop();
+  //client->stop();
 }
 
 /*
@@ -3053,26 +3095,7 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
            );
     w += strlen(w);
   }
-
-  if (conf->chase == 0) {
-    sprintf(w,
-            "\"uploader_position\": [ %s, %s, %s ],"
-            "\"uploader_antenna\": \"%s\""
-            "}]",
-            conf->lat, conf->lon, conf->alt, conf->antenna
-          );
-  }
-  else if (gpsPos.valid) {
-    sprintf(w,
-            "\"uploader_position\": [ %.6f, %.6f, %d ],"
-            "\"mobile\": \"true\""
-            "}]",
-            gpsPos.lat, gpsPos.lon, gpsPos.alt
-          );
-  }
-  else {
-    sprintf(w, "}]");
-  }
+  sprintf(w, "}]");
 
   client->println("PUT /sondes/telemetry HTTP/1.1");
   client->print("Host: ");
