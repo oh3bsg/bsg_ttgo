@@ -3120,8 +3120,6 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
             conf->antenna
            );
   }
-  
-  sprintf(w, "}]");
 
   client->println("PUT /sondes/telemetry HTTP/1.1");
   client->print("Host: ");
