@@ -2971,12 +2971,13 @@ void sondehub_station_update(WiFiClient *client, struct st_sondehub *conf) {
             "}",
             conf->lat, conf->lon, conf->alt, conf->antenna);
   }
-  else if (gpsPos.valid) {
+  else if (gpsPos.valid && gpsPos.lat != 0 && gpsPos.lon != 0) {
     sprintf(w,
             "\"uploader_position\": [%.6f, %.6f, %d],"
+            "\"uploader_antenna\": \"%s\""
             "\"mobile\": \"true\""
             "}",
-            gpsPos.lat, gpsPos.lon, gpsPos.alt);
+            gpsPos.lat, gpsPos.lon, gpsPos.alt, conf->antenna);
   }
   else {
     return;
@@ -3095,7 +3096,30 @@ void sondehub_send_data(WiFiClient *client, SondeInfo *s, struct st_sondehub *co
            );
     w += strlen(w);
   }
-  sprintf(w, "}]");
+  
+  if (conf->chase == 0) {
+    sprintf(w,
+            "\"uploader_position\": [ %s, %s, %s ],"
+            "\"uploader_antenna\": \"%s\""
+            "}]",
+            conf->lat, conf->lon, conf->alt, conf->antenna
+          );
+  }
+  else if (gpsPos.valid && gpsPos.lat != 0 && gpsPos.lon != 0) {
+    sprintf(w,
+            "\"uploader_position\": [ %.6f, %.6f, %d ],"
+            "\"uploader_antenna\": \"%s\""
+            "}]",
+            gpsPos.lat, gpsPos.lon, gpsPos.alt, conf->antenna
+          );
+  }
+  else {
+    sprintf(w, 
+            "\"uploader_antenna\": \"%s\""
+            "}]",
+            conf->antenna
+           );
+  }
 
   client->println("PUT /sondes/telemetry HTTP/1.1");
   client->print("Host: ");
