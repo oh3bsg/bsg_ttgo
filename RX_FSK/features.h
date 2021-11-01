@@ -4,11 +4,11 @@
 
 /* data feed to sondehubv2 */
 /* needs about 4k4 code, 200b data, 200b stack, 200b heap */
-#define FEATURE_SONDEHUB 1
-#define FEATURE_CHASEMAPPER 1
-#define FEATURE_MQTT 1
+#define FEATURE_SONDEHUB    1
+#define FEATURE_CHASEMAPPER 0
+#define FEATURE_MQTT        0
 
-#define FEATURE_RS92 1
+#define FEATURE_RS92        0
 
 /* Most recent version support fonts in a dedicated flash parition "fonts".
  * This is incomabtible (in terms of code and flash layout) to previous versions.
