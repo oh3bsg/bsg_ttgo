@@ -21,7 +21,7 @@
 #include "src/geteph.h"
 #include "src/rs92gps.h"
 #include "src/aprs.h"
-#include "src/ShFreqImport.h"
+//#include "src/ShFreqImport.h"
 #include "src/RS41.h"
 #if FEATURE_CHASEMAPPER
 #include "src/Chasemapper.h"
@@ -267,7 +267,7 @@ void setupChannelList() {
     SondeType type;
     if (space[1] == '4') {
       type = STYPE_RS41;
-    } else if (space[1] == 'R') {
+    } /* else if (space[1] == 'R') {
       type = STYPE_RS92;
     }
     else if (space[1] == 'D' || space[1] == '9' || space[1] == '6') {
@@ -281,7 +281,7 @@ void setupChannelList() {
     }
     else if (space[1] == '3') {
       type = STYPE_MP3H;
-    }
+    } */
     else continue;
     int active = space[3] == '+' ? 1 : 0;
     if (space[4] == ' ') {
@@ -506,7 +506,7 @@ void addSondeStatus(char *ptr, int i)
   strcat(ptr, "<table>");
   sprintf(ptr + strlen(ptr), "<tr><td id=\"sfreq\">%3.3f MHz, Type: %s</td><tr><td>ID: %s", s->freq, sondeTypeLongStr[sonde.realType(s)],
           s->d.validID ? s->d.id : "<?""?>");
-  if (s->d.validID && (TYPE_IS_DFM(s->type) || TYPE_IS_METEO(s->type) || s->type == STYPE_MP3H) ) {
+  if (s->d.validID && (TYPE_IS_DFM(s->type) || TYPE_IS_METEO(s->type) /*|| s->type == STYPE_MP3H*/) ) {
     sprintf(ptr + strlen(ptr), " (ser: %s)", s->d.ser);
   }
   sprintf(ptr + strlen(ptr), "</td></tr><tr><td>QTH: %.6f,%.6f h=%.0fm</td></tr>\n", s->d.lat, s->d.lon, s->d.alt);
@@ -2938,7 +2938,7 @@ void loopWifiScan() {
     wifi_state = WIFI_CONNECTED;
     bool hasRS92 = false;
     for (int i = 0; i < MAXSONDE; i++) {
-      if (sonde.sondeList[i].type == STYPE_RS92) hasRS92 = true;
+      //if (sonde.sondeList[i].type == STYPE_RS92) hasRS92 = true;
     }
     if (hasRS92) {
       geteph();
@@ -3413,7 +3413,7 @@ void sondehub_reply_handler(WiFiClient * client) {
 
   if (shImport == 1) { // we are waiting for a reply to a sondehub frequency import request
     // while we are waiting, we do nothing else with sondehub...
-    int res = ShFreqImport::shImportHandleReply(&shclient);
+    int res = 1; //ShFreqImport::shImportHandleReply(&shclient);
     Serial.printf("ret: %d\n", res);
     // res==0 means more data is expected, res==1 means complete reply received (or error)
     if (res == 1) {
@@ -3492,6 +3492,7 @@ void sondehub_send_fimport(WiFiClient * client) {
     lon = gpsPos.lon;
   }
 
+/*
   int maxdist = sonde.config.sondehub.fimaxdist;      // km
   int maxage = sonde.config.sondehub.fimaxage * 60;   // fimaxage is hours, shImportSendRequest uses minutes
   int fiinterval = sonde.config.sondehub.fiinterval;
@@ -3501,6 +3502,7 @@ void sondehub_send_fimport(WiFiClient * client) {
     if (res == 0) shImport = 1; // Request OK: wait for response
     else shImport = 2;        // Request failed: wait interval, then retry
   }
+*/
 }
 
 // in hours.... max allowed diff UTC <-> sonde time
@@ -3543,7 +3545,7 @@ void sondehub_send_data(WiFiClient * client, SondeInfo * s, struct st_sondehub *
   if (((int)s->d.lat == 0) && ((int)s->d.lon == 0)) return;	// Sometimes these values are zeroes. Don't send those to the sondehub
   if ((int)s->d.alt > 50000) return;	// If alt is too high don't send to SondeHub
   // M20 data does not include #sat information
-  if ( realtype != STYPE_M20 && (int)s->d.sats < 4) return;	// If not enough sats don't send to SondeHub
+  if ( /*realtype != STYPE_M20 &&*/ (int)s->d.sats < 4) return;	// If not enough sats don't send to SondeHub
 
   // If not connected to sondehub, try reconnecting.
   // TODO: do this outside of main loop
@@ -3570,7 +3572,7 @@ void sondehub_send_data(WiFiClient * client, SondeInfo * s, struct st_sondehub *
 
   //  DFM uses UTC. Most of the other radiosondes use GPS time
   // SondeHub expect datetime to be the same time sytem as the sonde transmits as time stamp
-  if ( realtype == STYPE_RS41 || realtype == STYPE_RS92 || realtype == STYPE_M20 ) {
+  if ( realtype == STYPE_RS41 /*|| realtype == STYPE_RS92 || realtype == STYPE_M20 */ ) {
     t += 18;	// convert back to GPS time from UTC time +18s
   }
 
@@ -3608,10 +3610,10 @@ void sondehub_send_data(WiFiClient * client, SondeInfo * s, struct st_sondehub *
   w += strlen(w);
 
   // Only send sats if not M20
-  if (realtype != STYPE_M20) {
+  //if (realtype != STYPE_M20) {
     sprintf(w, "\"sats\": %d,", (int)s->d.sats);
     w += strlen(w);
-  }
+  //}
 
   /* if there is a subtype (DFM only) */
   if ( TYPE_IS_DFM(s->type) && s->d.subtype > 0 && s->d.subtype < 16 ) {

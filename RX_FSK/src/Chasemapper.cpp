@@ -9,7 +9,7 @@ int Chasemapper::send(WiFiUDP &udp, SondeInfo *si) {
 	gmtime_r(&t, &tim);
 	uint8_t realtype = si->type;
 	if (TYPE_IS_METEO(realtype)) {
-		realtype = si->d.subtype == 1 ? STYPE_M10 : STYPE_M20;
+		//realtype = si->d.subtype == 1 ? STYPE_M10 : STYPE_M20;
 	}
 	sprintf(buf, "{ \"type\": \"PAYLOAD_SUMMARY\","
 		"\"callsign\": \"%s\","

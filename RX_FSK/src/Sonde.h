@@ -71,8 +71,10 @@ extern const char *manufacturer_string[NSondeTypes];
 
 #define ISOLED(cfg) ((cfg).disptype==0 || (cfg).disptype==2)
 
-#define TYPE_IS_DFM(t) ( (t)==STYPE_DFM )
-#define TYPE_IS_METEO(t) ( (t)==STYPE_M10M20 || (t)==STYPE_M10 || (t)==STYPE_M20 )
+//#define TYPE_IS_DFM(t) ( (t)==STYPE_DFM )
+#define TYPE_IS_DFM(t) false
+//#define TYPE_IS_METEO(t) ( (t)==STYPE_M10M20 || (t)==STYPE_M10 || (t)==STYPE_M20 )
+#define TYPE_IS_METEO(t) false
 
 #define VALIDPOS(x) (((x)&0x03)==0x03)
 #define VALIDALT(x) ((x)&0x04)

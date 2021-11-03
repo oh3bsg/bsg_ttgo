@@ -4,9 +4,9 @@
 #include "Sonde.h"
 #include "RS41.h"
 #include "RS92.h"
-#include "DFM.h"
-#include "M10M20.h"
-#include "MP3H.h"
+//#include "DFM.h"
+//#include "M10M20.h"
+//#include "MP3H.h"
 #include "SX1278FSK.h"
 #include "Display.h"
 #include <Wire.h>
@@ -434,6 +434,7 @@ void Sonde::setup() {
 	case STYPE_RS41:
 		rs41.setup(sondeList[rxtask.currentSonde].freq * 1000000);
 		break;
+/*
 	case STYPE_DFM:
 		dfm.setup( sondeList[rxtask.currentSonde].freq * 1000000, sondeList[rxtask.currentSonde].type );
 		break;
@@ -448,6 +449,7 @@ void Sonde::setup() {
 	case STYPE_MP3H:
 		mp3h.setup( sondeList[rxtask.currentSonde].freq * 1000000);
 		break;
+*/
 	}
 	// debug
 	int freq = (int)sx1278.getFrequency();
@@ -471,6 +473,7 @@ void Sonde::receive() {
 	case STYPE_RS92:
 		res = rs92.receive();
 		break;
+/*
 	case STYPE_M10:
 	case STYPE_M20:
 	case STYPE_M10M20:
@@ -482,6 +485,7 @@ void Sonde::receive() {
 	case STYPE_MP3H:
 		res = mp3h.receive();
 		break;
+*/
 	}
 
 	// state information for RX_TIMER / NORX_TIMER events
@@ -569,6 +573,7 @@ rxloop:
 	case STYPE_RS92:
 		rs92.waitRXcomplete();
 		break;
+/*
 	case STYPE_M10:
 	case STYPE_M20:
 	case STYPE_M10M20:
@@ -580,6 +585,7 @@ rxloop:
 	case STYPE_MP3H:
 		mp3h.waitRXcomplete();
 		break;
+*/
 	}
 	memmove(sonde.si()->rxStat+1, sonde.si()->rxStat, 17);
         sonde.si()->rxStat[0] = res;
