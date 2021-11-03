@@ -9,6 +9,7 @@
 #define FEATURE_MQTT        0
 
 #define FEATURE_RS92        0
+#define FEATURE_SD_CARD_LOG 1
 
 /* Most recent version support fonts in a dedicated flash parition "fonts".
  * This is incomabtible (in terms of code and flash layout) to previous versions.

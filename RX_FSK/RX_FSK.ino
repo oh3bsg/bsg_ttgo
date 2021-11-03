@@ -31,6 +31,12 @@
 #include "src/mqtt.h"
 #endif
 
+#if FEATURE_SD_CARD_LOG
+#include "FS.h"
+#include "SD.h"
+#include "src/sd_card.h"
+#endif
+
 //#define ESP_MEM_DEBUG 1
 //int e;
 
@@ -2146,6 +2152,11 @@ void setup()
   sonde.setup();
   initGPS();
 
+#if FEATURE_SD_CARD_LOG
+  sd_card_init();
+  createDir(SD, "/log");
+#endif
+
   WiFi.onEvent(WiFiEvent);
   getKeyPress();    // clear key buffer
 }
@@ -2372,6 +2383,9 @@ void loopDecoder() {
     if (sonde.config.sondehub.active) {
       sondehub_send_data(&shclient, s, &sonde.config.sondehub);
     }
+#endif
+#if FEATURE_SD_CARD_LOG
+  sd_card_log(s);
 #endif
 
 #if FEATURE_MQTT
