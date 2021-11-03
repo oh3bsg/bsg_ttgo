@@ -34,4 +34,4 @@
 .pio
 .vscode
 
-.bak
+*.bak
