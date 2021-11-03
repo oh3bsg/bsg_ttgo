@@ -104,7 +104,7 @@ void sd_card_log(SondeInfo *s) {
     "%04d-%02d-%02dT%02d:%02d:%02d.000Z,%s,%d,%.5f,%.5f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%s,%.3f,%d,-1,%d,%.1f,%d,-1\n",
     timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec,
     s->d.ser, s->d.vframe, (float)s->d.lat, (float)s->d.lon, (float)s->d.alt, (float)s->d.vs, (float)s->d.hs, (float)s->d.dir,
-    (float)s->d.temperature, isnan((float)s->d.relativeHumidity) ? -1: (float)s->d.relativeHumidity, isnan((float)s->d.pressure) ? -1: (float)s->d.pressure, s->d.typestr != 0 ? s->d.typestr: " ", (float)s->freq, s->rssi, s->d.sats, 
+    isnan((float)s->d.temperature) ? -273: (float)s->d.temperature, isnan((float)s->d.relativeHumidity) ? -1: (float)s->d.relativeHumidity, isnan((float)s->d.pressure) ? -1: (float)s->d.pressure, s->d.typestr != 0 ? s->d.typestr: " ", (float)s->freq, s->rssi, s->d.sats, 
     s->d.batteryVoltage, s->d.burstKT
     );
     Serial.println(log_msg);
