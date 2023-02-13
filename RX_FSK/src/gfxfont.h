@@ -6,6 +6,7 @@
 // To use a font in your Arduino sketch, #include the corresponding .h
 // file and pass address of GFXfont struct to setFont().
 
+#if 0
 #ifndef _GFFFONT_H_
 #define _GFFFONT_H_
 
@@ -24,3 +25,4 @@ typedef struct { // Data stored for FONT AS A WHOLE:
 } GFXfont;
 
 #endif // _GFFFONT_H_
+#endif // 0

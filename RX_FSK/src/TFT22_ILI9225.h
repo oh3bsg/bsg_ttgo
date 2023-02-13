@@ -1,6 +1,6 @@
 //        SPDX-License-Identifier:        GPL-3.0
 //      original source: https://github.com/Nkawu/TFT22_ILI9225
-
+#if 0
 #ifndef TFT22_ILI9225_h
 #define TFT22_ILI9225_h
 
@@ -469,3 +469,4 @@ class TFT22_ILI9225 {
 };
 
 #endif
+#endif // 0

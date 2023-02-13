@@ -5,7 +5,7 @@
 #include <rom/miniz.h>
 #include <inttypes.h>
 #include <WiFi.h>
-#include "Display.h"
+//#include "Display.h"
 #include "Sonde.h"
 
 extern WiFiClient client;
@@ -89,16 +89,16 @@ void geteph() {
 	if(!buf) { Serial.println("Invalid FTP host config"); return; }
         *buf = 0;
 	buf++;	
-	uint8_t dispw, disph, dispxs, dispys;
-  	disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
-	disp.rdis->clear();
-	disp.rdis->setFont(FONT_SMALL);
-	disp.rdis->drawString(0, 0, host);
+	//uint8_t dispw, disph, dispxs, dispys;
+  	//disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
+	//disp.rdis->clear();
+	//disp.rdis->setFont(FONT_SMALL);
+	//disp.rdis->drawString(0, 0, host);
 	// fetch rinex from server
 	char *ptr = buf + strlen(buf);
 	snprintf(ptr, 128, "%04d/%03d/brdc%03d0.%02dn.gz", year, day, day, year-2000);
 	Serial.println("running geteph\n");
-	disp.rdis->drawString(0, 1*dispys, ptr+9);
+	//disp.rdis->drawString(0, 1*dispys, ptr+9);
 	
 	if(!client.connect(host, 21)) {
 		Serial.printf("FTP connection to %s failed\n", host);
@@ -156,9 +156,9 @@ void geteph() {
 	fh.close();
 	snprintf(buf, 16, "Fetched %d B    ",len);
 	buf[16]=0;
-	disp.rdis->drawString(0,2*dispys,buf);
+	//disp.rdis->drawString(0,2*dispys,buf);
 
-	disp.rdis->drawString(0,4*dispys,"Decompressing...");
+	//disp.rdis->drawString(0,4*dispys,"Decompressing...");
 	// decompression
 	tinfl_decompressor *decomp = (tinfl_decompressor *)malloc(sizeof(tinfl_decompressor));
 	tinfl_init(decomp);
@@ -226,7 +226,7 @@ void geteph() {
 	status.close();
         snprintf(buf, 16, "Done: %d B    ",total);
         buf[16]=0;
-        disp.rdis->drawString(0,5*dispys,buf);
+        //disp.rdis->drawString(0,5*dispys,buf);
 	ephstate = EPH_GOOD;
 	delay(1000);
 

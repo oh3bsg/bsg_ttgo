@@ -1,10 +1,10 @@
 #include "Scanner.h"
 
-#include <U8x8lib.h>
+//#include <U8x8lib.h>
 
 #include "SX1278FSK.h"
 #include "Sonde.h"
-#include "Display.h"
+//#include "Display.h"
 
 
 double STARTF;
@@ -80,19 +80,19 @@ void Scanner::plotResult()
 		yofs = 2;
   		if (sonde.config.marker != 0) {
     			itoa((sonde.config.startfreq), buf, 10);
-    			disp.rdis->drawString(0, 1, buf);
-    			disp.rdis->drawString(scanconfig.PLOT_W/2-10, 1, "MHz");
+    			//disp.rdis->drawString(0, 1, buf);
+    			//disp.rdis->drawString(scanconfig.PLOT_W/2-10, 1, "MHz");
     			itoa((sonde.config.startfreq + 6), buf, 10);
-    			disp.rdis->drawString(scanconfig.PLOT_W-15, 1, buf);
+    			//disp.rdis->drawString(scanconfig.PLOT_W-15, 1, buf);
 		}	
 	}
 	else {
   		if (sonde.config.marker != 0) {
     			itoa((sonde.config.startfreq), buf, 10);
-    			disp.rdis->drawString(0, 1, buf);
-    			disp.rdis->drawString(7, 1, "MHz");
+    			//disp.rdis->drawString(0, 1, buf);
+    			//disp.rdis->drawString(7, 1, "MHz");
     			itoa((sonde.config.startfreq + 6), buf, 10);
-    			disp.rdis->drawString(13, 1, buf);
+    			//disp.rdis->drawString(13, 1, buf);
 		}	
   	}
 	uint8_t row[scanconfig.PLOT_H8*8];
@@ -108,15 +108,15 @@ void Scanner::plotResult()
 				// don't overwrite MHz marker text
 				if(i<3*8 || (i>=7*8&&i<10*8) || i>=13*8) continue;
 			}
-			disp.rdis->drawTile(i/8, y+yofs, 1, row+8*y);
+			//disp.rdis->drawTile(i/8, y+yofs, 1, row+8*y);
 		}
 	}
 	if(ISTFT) { // large TFT
 		sprintf(buf, "Peak: %03.3f MHz", peakf*0.000001);	
-		disp.rdis->drawString(0, (yofs+scanconfig.PLOT_H8+1)*8, buf);
+		//disp.rdis->drawString(0, (yofs+scanconfig.PLOT_H8+1)*8, buf);
 	} else {
 		sprintf(buf, "Peak: %03.3fMHz", peakf*0.000001);	
-		disp.rdis->drawString(0, 7, buf);
+		//disp.rdis->drawString(0, 7, buf);
 	}
 }
 

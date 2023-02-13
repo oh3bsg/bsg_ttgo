@@ -1,5 +1,5 @@
-#include <U8x8lib.h>
-#include <U8g2lib.h>
+//#include <U8x8lib.h>
+//#include <U8g2lib.h>
 
 #include "Sonde.h"
 #include "RS41.h"
@@ -8,7 +8,7 @@
 #include "M10M20.h"
 #include "MP3H.h"
 #include "SX1278FSK.h"
-#include "Display.h"
+//#include "Display.h"
 #include <Wire.h>
 
 uint8_t debug = 255-8-16;
@@ -106,7 +106,7 @@ void Sonde::defaultConfig() {
 	config.button2_axp = 0;
 	config.norx_timeout = 20;
 	config.screenfile = 1;
-	config.tft_spifreq = SPI_DEFAULT_FREQ;
+	//config.tft_spifreq = SPI_DEFAULT_FREQ;
 	if(initlevels[16]==0) {
 		config.oled_sda = 4;
 		config.oled_scl = 15;
@@ -507,11 +507,12 @@ void Sonde::receive() {
 
 	int event = getKeyPressEvent();
 	if (!event) event = timeoutEvent(si);
-	int action = (event==EVT_NONE) ? ACT_NONE : disp.layout->actions[event];
+	//int action = (event==EVT_NONE) ? ACT_NONE : disp.layout->actions[event];
 	//if(action!=ACT_NONE) { Serial.printf("event %x: action is %x\n", event, action); }
 	// If action is to move to a different sonde index, we do update things here, set activate
 	// to force the sx1278 task to call sonde.setup(), and pass information about sonde to
 	// main loop (display update...)
+#if 0
 	if(action == ACT_DISPLAY_SCANNER || action == ACT_NEXTSONDE || action==ACT_PREVSONDE || (action>64&&action<128) ) {
 		// handled here...
 		if(action==ACT_DISPLAY_SCANNER) {
@@ -529,8 +530,9 @@ void Sonde::receive() {
 			rxtask.activate = ACT_SONDE(rxtask.currentSonde);
 		}
 	}
-	Serial.printf("Sonde:receive(): result %d (%s), event %02x => action %02x\n", res, (res<=3)?RXstr[res]:"?", event, action);
-	res = (action<<8) | (res&0xff);
+#endif // 0
+	//Serial.printf("Sonde:receive(): result %d (%s), event %02x => action %02x\n", res, (res<=3)?RXstr[res]:"?", event, action);
+	//res = (action<<8) | (res&0xff);
 	// let waitRXcomplete resume...
 	rxtask.receiveResult = res;
 }
@@ -548,7 +550,7 @@ rxloop:
 	if( rxtask.receiveResult == RX_UPDATERSSI ) {
 		rxtask.receiveResult = 0xFFFF;
 		Serial.printf("RSSI update: %d/2\n", sonde.si()->rssi);
-		disp.updateDisplayRSSI();
+		//disp.updateDisplayRSSI();
 		goto rxloop;
 	}
 
@@ -594,6 +596,7 @@ uint8_t Sonde::timeoutEvent(SondeInfo *si) {
 		now, si->rxStart, disp.layout->timeouts[1],
 		now, si->norxStart, disp.layout->timeouts[2], si->lastState);
 #endif
+#if 0
 	if(disp.layout->timeouts[0]>=0 && now - si->viewStart >= disp.layout->timeouts[0]) {
 		Serial.println("Sonde::timeoutEvent: View");
 		return EVT_VIEWTO;
@@ -606,6 +609,7 @@ uint8_t Sonde::timeoutEvent(SondeInfo *si) {
 		Serial.println("Sonde::timeoutEvent: NORX");
 		return EVT_NORXTO;
 	}
+#endif // 0
 	return 0;
 }
 
@@ -631,7 +635,7 @@ uint8_t Sonde::updateState(uint8_t event) {
 	} else if(event==ACT_DISPLAY_NEXT) {
 		int i;
 		for(i=0; config.display[i]!=-1; i++) {
-			if(config.display[i] == disp.layoutIdx) break;
+			//if(config.display[i] == disp.layoutIdx) break;
 		}
 		if(config.display[i]==-1 || config.display[i+1]==-1) {
 			//unknown index, or end of list => loop to start
@@ -641,13 +645,13 @@ uint8_t Sonde::updateState(uint8_t event) {
 		}
 	}
 	if(n>=0 && n<ACT_MAXDISPLAY) {
-		if(n>=disp.nLayouts) {
-			Serial.println("WARNNG: next layout out of range");
-			n = config.display[1];
-		}
+		//if(n>=disp.nLayouts) {
+		//	Serial.println("WARNNG: next layout out of range");
+		//	n = config.display[1];
+		//}
 		Serial.printf("Setting display mode %d\n", n);
-		disp.setLayout(n);
-		sonde.clearDisplay();
+		//disp.setLayout(n);
+		//sonde.clearDisplay();
 		return 0xFF;
 	}
 
@@ -679,6 +683,7 @@ void Sonde::clearAllData(SondeInfo *si) {
 	si->d.temperature = si->d.tempRHSensor = si->d.relativeHumidity = si->d.pressure = si->d.batteryVoltage = NAN;
 }
 
+#if 0
 void Sonde::updateDisplayPos() {
 	disp.updateDisplayPos();
 }
@@ -715,7 +720,7 @@ void Sonde::updateDisplay()
 void Sonde::clearDisplay() {
 	disp.rdis->clear();
 }
-
+#endif // 0
 SondeType Sonde::realType(SondeInfo *si) {
 	if(TYPE_IS_METEO(si->type) && si->d.subtype>0 ) { return si->d.subtype==1 ? STYPE_M10:STYPE_M20; }
 	else return si->type;

@@ -1,3 +1,4 @@
+#if 0
 #ifndef Display_h
 #define Display_h
 
@@ -199,4 +200,5 @@ public:
 
 extern Display disp;
 
-#endif 
+#endif
+#endif // 0 

@@ -1,3 +1,4 @@
+#if 0
 #include "../features.h"
 #include <U8x8lib.h>
 #include <U8g2lib.h>
@@ -1780,3 +1781,4 @@ void Display::updateDisplay() {
 }
 
 Display disp = Display();
+#endif // 0

@@ -16,7 +16,8 @@
 
 #include "src/SX1278FSK.h"
 #include "src/Sonde.h"
-#include "src/Display.h"
+//#include "src/Display.h"
+#include "src\headless.h"
 #include "src/Scanner.h"
 #include "src/geteph.h"
 #include "src/rs92gps.h"
@@ -82,6 +83,8 @@ const char *dfmSubtypeStrSH[16] = { NULL, NULL, NULL, NULL, NULL, NULL,
 #define APRS_MOBILE_STATION_UPDATE_TIME (20*1000)
 unsigned long time_last_aprs_update = 0;
 
+#define EARTH_RADIUS (6371000.0F)
+
 #if FEATURE_SONDEHUB
 #define SONDEHUB_STATION_UPDATE_TIME (60*60*1000) // 60 min
 #define SONDEHUB_MOBILE_STATION_UPDATE_TIME (30*1000) // 30 sec
@@ -102,7 +105,6 @@ enum { SH_LOC_OFF, SH_LOC_FIXED, SH_LOC_CHASE, SH_LOC_AUTO };
 #define MIN_LOC_AUTO_DIST 200   /* meter */
 #define SH_LOC_AUTO_IS_CHASE ( gpsPos.valid && ( (isnan(sonde.config.rxlat) || isnan(sonde.config.rxlon) ) ||  \
                                calcLatLonDist( gpsPos.lat, gpsPos.lon, sonde.config.rxlat, sonde.config.rxlon ) > MIN_LOC_AUTO_DIST ) )
-extern float calcLatLonDist(float lat1, float lon1, float lat2, float lon2);
 
 // KISS over TCP for communicating with APRSdroid
 WiFiServer tncserver(14580);
@@ -146,6 +148,15 @@ void WiFiEvent(WiFiEvent_t event);
 
 char buffer[85];
 MicroNMEA nmea(buffer, sizeof(buffer));
+
+//float calcLatLonDist(float lat1, float lon1, float lat2, float lon2);
+
+float calcLatLonDist(float lat1, float lon1, float lat2, float lon2) {
+        float x = radians(lon1-lon2) * cos( radians((lat1+lat2)/2) );
+        float y = radians(lat2-lat1);
+        float d = sqrt(x*x+y*y)*EARTH_RADIUS;
+	return d;
+}
 
 // Read line from file, independent of line termination (LF or CR LF)
 String readLine(Stream &stream) {
@@ -715,10 +726,10 @@ const char *createConfigForm() {
   strcat(ptr, "<div id=\"cfgtab\"></div>");
   strcat(ptr, "<script src=\"cfg.js\"></script>");
   strcat(ptr, "<script>\n");
-  sprintf(ptr + strlen(ptr), "var scr=\"Using /screens%d.txt", Display::getScreenIndex(sonde.config.screenfile));
-  for (int i = 0; i < disp.nLayouts; i++) {
-    sprintf(ptr + strlen(ptr), "<br>%d=%s", i, disp.layouts[i].label);
-  }
+  //sprintf(ptr + strlen(ptr), "var scr=\"Using /screens%d.txt", Display::getScreenIndex(sonde.config.screenfile));
+  //for (int i = 0; i < disp.nLayouts; i++) {
+  //  sprintf(ptr + strlen(ptr), "<br>%d=%s", i, disp.layouts[i].label);
+  //}
   strcat(ptr, "\";\n");
   strcat(ptr, "var cf=new Map();\n");
   for (int i = 0; i < N_CONFIG; i++) {
@@ -1909,8 +1920,8 @@ void setup()
     for (int i = 0; i < 10; i++) { // try multiple times
       Wire.begin(21, 22);
       // Make sure the whole thing powers up!?!?!?!?!?
-      U8X8 *u8x8 = new U8X8_SSD1306_128X64_NONAME_HW_I2C(0, 22, 21);
-      u8x8->initDisplay();
+      //U8X8 *u8x8 = new U8X8_SSD1306_128X64_NONAME_HW_I2C(0, 22, 21);
+      //u8x8->initDisplay();
       delay(500);
 
       scanI2Cdevice();
@@ -1924,36 +1935,36 @@ void setup()
         // Display backlight on M5 Core2
         axp.setPowerOutPut(AXP192_DCDC3, AXP202_ON);
         axp.setDCDC3Voltage(3300);
-	// SetBusPowerMode(0):
-	// #define AXP192_GPIO0_CTL                        (0x90)
-	// #define AXP192_GPIO0_VOL                        (0x91)
-	// #define AXP202_LDO234_DC23_CTL                  (0x12)
+        // SetBusPowerMode(0):
+        // #define AXP192_GPIO0_CTL                        (0x90)
+        // #define AXP192_GPIO0_VOL                        (0x91)
+        // #define AXP202_LDO234_DC23_CTL                  (0x12)
 
-	// The axp class lacks a functino to set GPIO0 VDO to 3.3V (as is done by original M5Stack software)
-	// so do this manually (default value 2.8V did not have the expected effect :))
-	// data = Read8bit(0x91);
-        // write1Byte(0x91, (data & 0X0F) | 0XF0);
-	uint8_t reg;
-	Wire.beginTransmission((uint8_t)AXP192_SLAVE_ADDRESS);
-	Wire.write(AXP192_GPIO0_VOL);
-	Wire.endTransmission();
-	Wire.requestFrom(AXP192_SLAVE_ADDRESS, 1);
-	reg = Wire.read();
-	reg = (reg&0x0F) | 0xF0;
-	Wire.beginTransmission((uint8_t)AXP192_SLAVE_ADDRESS);
-	Wire.write(AXP192_GPIO0_VOL);
-	Wire.write(reg);
-	Wire.endTransmission();
-	// data = Read8bit(0x90);
-        // Write1Byte(0x90, (data & 0XF8) | 0X02)
-	axp.setGPIOMode(AXP_GPIO_0, AXP_IO_LDO_MODE);  // disable AXP supply from VBUS
-        pmu_irq = 2; // IRQ pin is not connected on Core2
-	// data = Read8bit(0x12);         //read reg 0x12
-        // Write1Byte(0x12, data | 0x40);    // enable 3,3V => 5V booster
-	// this is done below anyway: axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
+        // The axp class lacks a functino to set GPIO0 VDO to 3.3V (as is done by original M5Stack software)
+        // so do this manually (default value 2.8V did not have the expected effect :))
+        // data = Read8bit(0x91);
+              // write1Byte(0x91, (data & 0X0F) | 0XF0);
+        uint8_t reg;
+        Wire.beginTransmission((uint8_t)AXP192_SLAVE_ADDRESS);
+        Wire.write(AXP192_GPIO0_VOL);
+        Wire.endTransmission();
+        Wire.requestFrom(AXP192_SLAVE_ADDRESS, 1);
+        reg = Wire.read();
+        reg = (reg&0x0F) | 0xF0;
+        Wire.beginTransmission((uint8_t)AXP192_SLAVE_ADDRESS);
+        Wire.write(AXP192_GPIO0_VOL);
+        Wire.write(reg);
+        Wire.endTransmission();
+        // data = Read8bit(0x90);
+              // Write1Byte(0x90, (data & 0XF8) | 0X02)
+        axp.setGPIOMode(AXP_GPIO_0, AXP_IO_LDO_MODE);  // disable AXP supply from VBUS
+              pmu_irq = 2; // IRQ pin is not connected on Core2
+        // data = Read8bit(0x12);         //read reg 0x12
+              // Write1Byte(0x12, data | 0x40);    // enable 3,3V => 5V booster
+        // this is done below anyway: axp.setPowerOutPut(AXP192_EXTEN, AXP202_ON);
 
-        axp.adc1Enable(AXP202_ACIN_VOL_ADC1, 1);
-        axp.adc1Enable(AXP202_ACIN_CUR_ADC1, 1);
+          axp.adc1Enable(AXP202_ACIN_VOL_ADC1, 1);
+          axp.adc1Enable(AXP202_ACIN_CUR_ADC1, 1);
       } else {
         // GPS on T-Beam, buzzer on M5 Core2
         axp.setPowerOutPut(AXP192_LDO3, AXP202_ON);
@@ -2022,58 +2033,58 @@ void setup()
   }
   initTouch();
 
-  disp.init();
+  //disp.init();
   delay(100);
   Serial.println("Showing welcome display");
-  disp.rdis->welcome();
+  //disp.rdis->welcome();
   delay(3000);
   Serial.println("Clearing display");
-  sonde.clearDisplay();
+  //sonde.clearDisplay();
 
   setupWifiList();
-  Serial.printf("before disp.initFromFile... layouts is %p\n", disp.layouts);
+  //Serial.printf("before disp.initFromFile... layouts is %p\n", disp.layouts);
 
-  disp.initFromFile(sonde.config.screenfile);
-  Serial.printf("disp.initFromFile... layouts is %p", disp.layouts);
+  //disp.initFromFile(sonde.config.screenfile);
+  //Serial.printf("disp.initFromFile... layouts is %p", disp.layouts);
 
 
   // == show initial values from config.txt ========================= //
   if (sonde.config.debug == 1) {
-    disp.rdis->setFont(FONT_SMALL);
-    disp.rdis->drawString(0, 0, "Config:");
+    //disp.rdis->setFont(FONT_SMALL);
+    //disp.rdis->drawString(0, 0, "Config:");
 
     delay(500);
     itoa(sonde.config.oled_sda, buf, 10);
-    disp.rdis->drawString(0, 1, " SDA:");
-    disp.rdis->drawString(6, 1, buf);
+    //disp.rdis->drawString(0, 1, " SDA:");
+    //disp.rdis->drawString(6, 1, buf);
 
     delay(500);
     itoa(sonde.config.oled_scl, buf, 10);
-    disp.rdis->drawString(0, 2, " SCL:");
-    disp.rdis->drawString(6, 2, buf);
+    //disp.rdis->drawString(0, 2, " SCL:");
+    //disp.rdis->drawString(6, 2, buf);
 
     delay(500);
     itoa(sonde.config.oled_rst, buf, 10);
-    disp.rdis->drawString(0, 3, " RST:");
-    disp.rdis->drawString(6, 3, buf);
+    //disp.rdis->drawString(0, 3, " RST:");
+    //disp.rdis->drawString(6, 3, buf);
 
     delay(1000);
     itoa(sonde.config.led_pout, buf, 10);
-    disp.rdis->drawString(0, 4, " LED:");
-    disp.rdis->drawString(6, 4, buf);
+    //disp.rdis->drawString(0, 4, " LED:");
+    //disp.rdis->drawString(6, 4, buf);
 
     delay(500);
     itoa(sonde.config.spectrum, buf, 10);
-    disp.rdis->drawString(0, 5, " SPEC:");
-    disp.rdis->drawString(6, 5, buf);
+    //disp.rdis->drawString(0, 5, " SPEC:");
+    //disp.rdis->drawString(6, 5, buf);
 
     delay(500);
     itoa(sonde.config.maxsonde, buf, 10);
-    disp.rdis->drawString(0, 6, " MAX:");
-    disp.rdis->drawString(6, 6, buf);
+    //disp.rdis->drawString(0, 6, " MAX:");
+    //disp.rdis->drawString(6, 6, buf);
 
     delay(5000);
-    sonde.clearDisplay();
+    //sonde.clearDisplay();
   }
   // == show initial values from config.txt ========================= //
 
@@ -2163,12 +2174,12 @@ void enterMode(int mode) {
   mainState = (MainState)mode;
   if (mainState == ST_SPECTRUM) {
     Serial.println("Entering ST_SPECTRUM mode");
-    sonde.clearDisplay();
-    disp.rdis->setFont(FONT_SMALL);
+    //sonde.clearDisplay();
+    //disp.rdis->setFont(FONT_SMALL);
     specTimer = millis();
     //scanner.init();
   } else if (mainState == ST_WIFISCAN) {
-    sonde.clearDisplay();
+    //sonde.clearDisplay();
   }
   if (mode == ST_DECODER) {
     // trigger activation of background task
@@ -2176,8 +2187,8 @@ void enterMode(int mode) {
     rxtask.activate = ACT_SONDE(sonde.currentSonde);
     //
     Serial.println("clearing and updating display");
-    sonde.clearDisplay();
-    sonde.updateDisplay();
+    //sonde.clearDisplay();
+    //sonde.updateDisplay();
   }
   printf("enterMode ok\n");
 }
@@ -2483,12 +2494,12 @@ void loopDecoder() {
   }
   Serial.print("MAIN: updateDisplay started\n");
   if (forceReloadScreenConfig) {
-    disp.initFromFile(sonde.config.screenfile);
-    sonde.clearDisplay();
+    //disp.initFromFile(sonde.config.screenfile);
+    //sonde.clearDisplay();
     forceReloadScreenConfig = false;
   }
   int t = millis();
-  sonde.updateDisplay();
+  //sonde.updateDisplay();
   Serial.printf("MAIN: updateDisplay done (after %d ms)\n", (int)(millis() - t));
 }
 
@@ -2498,10 +2509,10 @@ void setCurrentDisplay(int value) {
 }
 
 void loopSpectrum() {
-  int marker = 0;
+  //int marker = 0;
   char buf[10];
-  uint8_t dispw, disph, dispxs, dispys;
-  disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
+  //uint8_t dispw, disph, dispxs, dispys;
+  //disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
 
   switch (getKeyPress()) {
     case KP_SHORT: /* move selection of peak, TODO */
@@ -2534,21 +2545,21 @@ void loopSpectrum() {
     int remaining = sonde.config.spectrum - (millis() - specTimer) / 1000;
     Serial.printf("config.spectrum:%d  specTimer:%ld millis:%ld remaining:%d\n", sonde.config.spectrum, specTimer, millis(), remaining);
     if (sonde.config.marker != 0) {
-      marker = 1;
+      //marker = 1;
     }
     snprintf(buf, 10, "%d Sec.", remaining);
-    disp.rdis->drawString(0, dispys <= 1 ? (1 + marker) : (dispys + 1)*marker, buf);
+    //disp.rdis->drawString(0, dispys <= 1 ? (1 + marker) : (dispys + 1)*marker, buf);
     if (remaining <= 0) {
-      setCurrentDisplay(0);
+      //setCurrentDisplay(0);
       enterMode(ST_DECODER);
     }
   }
 }
 
 void startSpectrumDisplay() {
-  sonde.clearDisplay();
-  disp.rdis->setFont(FONT_SMALL);
-  disp.rdis->drawString(0, 0, "Spectrum Scan...");
+  //sonde.clearDisplay();
+  //disp.rdis->setFont(FONT_SMALL);
+  //disp.rdis->drawString(0, 0, "Spectrum Scan...");
   delay(500);
   enterMode(ST_SPECTRUM);
 }
@@ -2782,7 +2793,7 @@ void loopWifiBackground() {
       // update IP in display
       String localIPstr = WiFi.localIP().toString();
       sonde.setIP(localIPstr.c_str(), false);
-      sonde.updateDisplayIP();
+      //sonde.updateDisplayIP();
       enableNetwork(true);
     }
     if (wifi_cto > 20) { // failed, restart scanning
@@ -2792,7 +2803,7 @@ void loopWifiBackground() {
   } else if (wifi_state == WIFI_CONNECTED) {
     if (!WiFi.isConnected()) {
       sonde.setIP("", false);
-      sonde.updateDisplayIP();
+      //sonde.updateDisplayIP();
 
       wifi_state = WIFI_DISABLED;  // restart scan
       enableNetwork(false);
@@ -2813,7 +2824,7 @@ void startAP() {
   IPAddress myIP = WiFi.softAPIP();
   String myIPstr = myIP.toString();
   sonde.setIP(myIPstr.c_str(), true);
-  sonde.updateDisplayIP();
+  //sonde.updateDisplayIP();
   // enableNetwork(true); done later in WifiLoop.
 }
 
@@ -2831,22 +2842,22 @@ void initialMode() {
 }
 
 void loopTouchCalib() {
-  uint8_t dispw, disph, dispxs, dispys;
-  disp.rdis->clear();
-  disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
+  //uint8_t dispw, disph, dispxs, dispys;
+  //disp.rdis->clear();
+  //disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
   char num[10];
 
   while (1) {
-    int t1 = touchRead(button1.pin & 0x7f);
+    //int t1 = touchRead(button1.pin & 0x7f);
     int t2 = touchRead(button2.pin & 0x7f);
-    disp.rdis->setFont(FONT_LARGE);
-    disp.rdis->drawString(0, 0, "Touch calib.");
-    disp.rdis->drawString(0, 3 * dispys, "Touch1: ");
-    snprintf(num, 10, "%d  ", t1);
-    disp.rdis->drawString(8 * dispxs, 3 * dispys, num);
-    disp.rdis->drawString(0, 6 * dispys, "Touch2: ");
+    //disp.rdis->setFont(FONT_LARGE);
+    //disp.rdis->drawString(0, 0, "Touch calib.");
+    //disp.rdis->drawString(0, 3 * dispys, "Touch1: ");
+    //snprintf(num, 10, "%d  ", t1);
+    //disp.rdis->drawString(8 * dispxs, 3 * dispys, num);
+    //disp.rdis->drawString(0, 6 * dispys, "Touch2: ");
     snprintf(num, 10, "%d  ", t2);
-    disp.rdis->drawString(8 * dispxs, 6 * dispys, num);
+    //disp.rdis->drawString(8 * dispxs, 6 * dispys, num);
     delay(300);
   }
 }
@@ -2858,7 +2869,7 @@ void loopTouchCalib() {
 // 3: traditional sync. WifiScan. Tries to connect to a network, in case of failure activates AP.
 //    Mode 3 shows more debug information on serial port and display.
 #define MAXWIFIDELAY 40
-static const char* _scan[2] = {"/", "\\"};
+//static const char* _scan[2] = {"/", "\\"};
 void loopWifiScan() {
   if (sonde.config.wifi == 0) {   // no Wifi
     wifi_state = WIFI_DISABLED;
@@ -2877,12 +2888,12 @@ void loopWifiScan() {
     return;
   }
   // wifi==3 => original mode with non-async wifi setup
-  disp.rdis->setFont(FONT_SMALL);
-  disp.rdis->drawString(0, 0, "WiFi Scan...");
-  uint8_t dispw, disph, dispxs, dispys;
-  disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
+  //disp.rdis->setFont(FONT_SMALL);
+  //disp.rdis->drawString(0, 0, "WiFi Scan...");
+  //uint8_t dispw, disph, dispxs, dispys;
+  //disp.rdis->getDispSize(&disph, &dispw, &dispxs, &dispys);
 
-  int line = 0;
+  //int line = 0;
   int cnt = 0;
 
   WiFi.disconnect(true);
@@ -2891,8 +2902,8 @@ void loopWifiScan() {
   int n = WiFi.scanNetworks();
   for (int i = 0; i < n; i++) {
     String ssid = WiFi.SSID(i);
-    disp.rdis->drawString(0, dispys * (1 + line), ssid.c_str());
-    line = (line + 1) % (disph / dispys);
+    //disp.rdis->drawString(0, dispys * (1 + line), ssid.c_str());
+    //line = (line + 1) % (disph / dispys);
     String mac = WiFi.BSSIDstr(i);
     String encryptionTypeDescription = translateEncryptionType(WiFi.encryptionType(i));
     Serial.printf("Network %s: RSSI %d, MAC %s, enc: %s\n", ssid.c_str(), WiFi.RSSI(i), mac.c_str(), encryptionTypeDescription.c_str());
@@ -2902,18 +2913,18 @@ void loopWifiScan() {
       Serial.printf("Match found at scan entry %d, config network %d\n", i, index);
     }
   }
-  int lastl = (disph / dispys - 2) * dispys;
+  //int lastl = (disph / dispys - 2) * dispys;
   if (index >= 0) { // some network was found
     Serial.print("Connecting to: "); Serial.print(fetchWifiSSID(index));
     Serial.print(" with password "); Serial.println(fetchWifiPw(index));
 
-    disp.rdis->drawString(0, lastl, "Conn:");
-    disp.rdis->drawString(6 * dispxs, lastl, fetchWifiSSID(index));
+    //disp.rdis->drawString(0, lastl, "Conn:");
+    //disp.rdis->drawString(6 * dispxs, lastl, fetchWifiSSID(index));
     WiFi.begin(fetchWifiSSID(index), fetchWifiPw(index));
     while (WiFi.status() != WL_CONNECTED && cnt < MAXWIFIDELAY)  {
       delay(500);
       Serial.print(".");
-      disp.rdis->drawString(15 * dispxs, lastl + dispys, _scan[cnt & 1]);
+      //disp.rdis->drawString(15 * dispxs, lastl + dispys, _scan[cnt & 1]);
       cnt++;
     }
   }
@@ -2924,8 +2935,8 @@ void loopWifiScan() {
     IPAddress myIP = WiFi.softAPIP();
     Serial.print("AP IP address: ");
     Serial.println(myIP);
-    disp.rdis->drawString(0, lastl, "AP:             ");
-    disp.rdis->drawString(6 * dispxs, lastl + 1, networks[0].id.c_str());
+    //disp.rdis->drawString(0, lastl, "AP:             ");
+    //disp.rdis->drawString(6 * dispxs, lastl + 1, networks[0].id.c_str());
     delay(3000);
   } else {
     Serial.println("");
@@ -2934,7 +2945,7 @@ void loopWifiScan() {
     String localIPstr = WiFi.localIP().toString();
     Serial.println(localIPstr);
     sonde.setIP(localIPstr.c_str(), false);
-    sonde.updateDisplayIP();
+    //sonde.updateDisplayIP();
     wifi_state = WIFI_CONNECTED;
     bool hasRS92 = false;
     for (int i = 0; i < MAXSONDE; i++) {
@@ -2963,20 +2974,22 @@ String getHeaderValue(String header, String headerName) {
 void execOTA() {
   int contentLength = 0;
   bool isValidContentType = false;
-  sonde.clearDisplay();
-  uint8_t dispxs, dispys;
+  //sonde.clearDisplay();
+  //uint8_t dispxs,
+  //uint8_t dispys;
   if ( ISOLED(sonde.config) ) {
-    disp.rdis->setFont(FONT_SMALL);
-    dispxs = dispys = 1;
+    //disp.rdis->setFont(FONT_SMALL);
+    //dispxs = 
+    //dispys = 1;
     char uh[17];
     strncpy(uh, updateHost, 17);
     uh[16] = 0;
-    disp.rdis->drawString(0, 0, uh);
+    //disp.rdis->drawString(0, 0, uh);
   } else {
-    disp.rdis->setFont(5);
-    dispxs = 18;
-    dispys = 20;
-    disp.rdis->drawString(0, 0, updateHost);
+    //disp.rdis->setFont(5);
+    //dispxs = 18;
+    //dispys = 20;
+    //disp.rdis->drawString(0, 0, updateHost);
   }
 
   Serial.print("Connecting to: "); Serial.println(updateHost);
@@ -2988,7 +3001,7 @@ void execOTA() {
 
   // First, update file system
   Serial.println("Fetching fs update");
-  disp.rdis->drawString(0, 1 * dispys, "Fetching fs...");
+  //disp.rdis->drawString(0, 1 * dispys, "Fetching fs...");
   client.printf("GET %supdate.fs.bin HTTP/1.1\r\n"
                 "Host: %s\r\n"
                 "Cache-Control: no-cache\r\n"
@@ -3018,7 +3031,7 @@ void execOTA() {
     memset(fnstr, ' ', 16);
     strncpy(fnstr, fn, 16);
     fnstr[16] = 0;
-    disp.rdis->drawString(0, 2 * dispys, fnstr);
+    //disp.rdis->drawString(0, 2 * dispys, fnstr);
     File f = SPIFFS.open(fn, FILE_WRITE);
     // read sz bytes........
     while (len > 0) {
@@ -3043,7 +3056,7 @@ void execOTA() {
 
   // Connection succeeded, fecthing the bin
   Serial.printf("Fetching bin: %supdate.ino.bin\n", updatePrefix);
-  disp.rdis->drawString(0, 3 * dispys, "Fetching update");
+  //disp.rdis->drawString(0, 3 * dispys, "Fetching update");
 
   // Get the contents of the bin file
   client.printf("GET %supdate.ino.bin HTTP/1.1\r\n"
@@ -3064,9 +3077,9 @@ void execOTA() {
 
   // Check what is the contentLength and if content type is `application/octet-stream`
   Serial.println("contentLength : " + String(contentLength) + ", isValidContentType : " + String(isValidContentType));
-  disp.rdis->drawString(0, 4 * dispys, "Len: ");
+  //disp.rdis->drawString(0, 4 * dispys, "Len: ");
   String cls = String(contentLength);
-  disp.rdis->drawString(5 * dispxs, 4 * dispys, cls.c_str());
+  //disp.rdis->drawString(5 * dispxs, 4 * dispys, cls.c_str());
 
   // check contentLength and content type
   if (contentLength && isValidContentType) {
@@ -3075,7 +3088,7 @@ void execOTA() {
 
     // If yes, begin
     if (canBegin) {
-      disp.rdis->drawString(0, 5 * dispys, "Starting update");
+      //disp.rdis->drawString(0, 5 * dispys, "Starting update");
       Serial.println("Begin OTA. This may take 2 - 5 mins to complete. Things might be quite for a while.. Patience!");
       // No activity would appear on the Serial monitor
       // So be patient. This may take 2 - 5mins to complete
@@ -3093,7 +3106,7 @@ void execOTA() {
         Serial.println("OTA done!");
         if (Update.isFinished()) {
           Serial.println("Update successfully completed. Rebooting.");
-          disp.rdis->drawString(0, 7 * dispys, "Rebooting....");
+          //disp.rdis->drawString(0, 7 * dispys, "Rebooting....");
           delay(1000);
           ESP.restart();
         } else {
@@ -3218,10 +3231,10 @@ void loop() {
 #endif
   loopWifiBackground();
   if (currentDisplay != lastDisplay && (mainState == ST_DECODER)) {
-    disp.setLayout(currentDisplay);
-    sonde.clearDisplay();
-    sonde.updateDisplay();
-    lastDisplay = currentDisplay;
+    //disp.setLayout(currentDisplay);
+    //sonde.clearDisplay();
+    //sonde.updateDisplay();
+    //lastDisplay = currentDisplay;
   }
 
 #if FEATURE_MQTT

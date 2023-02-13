@@ -7,6 +7,7 @@
 
 #include "ShFreqImport.h"
 #include "Sonde.h"
+//#include "headless.h"
 
 static int ppos;
 static int quotes;
@@ -24,7 +25,6 @@ static int valuepos;
 
 static int importState;
 static float homelat, homelon;
-
 
 // Map SondeHub type string to Stype. -1 for not supported types.
 int ShFreqImport::stringToStype(const char *type) {
