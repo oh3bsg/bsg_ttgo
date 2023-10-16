@@ -513,6 +513,13 @@ void Sonde::receive() {
 	if (!event) event = timeoutEvent(si);
 	else sonde.dispsavectlON();
 	int action = (event==EVT_NONE) ? ACT_NONE : disp.layout->actions[event];
+
+#if 1
+	if ((res==RX_OK || res==RX_ERROR) && (si->d.alt > 2000.0f)) {
+		action = ACT_NEXTSONDE;
+	}
+#endif // 0
+
 	//if(action!=ACT_NONE) { Serial.printf("event %x: action is %x\n", event, action); }
 	// If action is to move to a different sonde index, we do update things here, set activate
 	// to force the sx1278 task to call sonde.setup(), and pass information about sonde to
