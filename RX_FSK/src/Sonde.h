@@ -229,6 +229,11 @@ struct st_sondehub {
 	double fimaxage;
 };
 
+struct st_multich {
+	int active;
+	uint32_t alt_limit;
+};
+
 // to be extended
 enum { TYPE_TTGO, TYPE_M5_CORE2 };
 
@@ -296,6 +301,7 @@ typedef struct st_rdzconfig {
 	struct st_kisstnc kisstnc;	// target for KISS TNC (via TCP, mainly for APRSdroid)
 	struct st_mqtt mqtt;
 	struct st_sondehub sondehub;
+	struct st_multich multich;
 	struct st_cm cm;
 } RDZConfig;
 

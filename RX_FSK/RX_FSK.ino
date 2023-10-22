@@ -704,6 +704,12 @@ struct st_configitems config_list[] = {
   {"sondehub.fimaxdist", 0, &sonde.config.sondehub.fimaxdist},
   {"sondehub.fimaxage", -7, &sonde.config.sondehub.fimaxage},
 #endif
+
+#if FEATURE_MULTICH
+  /* Multi channel settings*/
+  {"multich.active", 0, &sonde.config.multich.active},
+  {"multich.alt_limit", 0, &sonde.config.multich.alt_limit},
+#endif // FEATURE_MULTICH
 };
 
 const int N_CONFIG = (sizeof(config_list) / sizeof(struct st_configitems));

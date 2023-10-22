@@ -10,6 +10,7 @@
 #define FEATURE_MQTT 1
 #define FEATURE_SDCARD 0
 #define FEATURE_APRS 1
+#define FEATURE_MULTICH 1
 
 
 // Additional optional components

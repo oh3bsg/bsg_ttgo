@@ -514,9 +514,11 @@ void Sonde::receive() {
 	else sonde.dispsavectlON();
 	int action = (event==EVT_NONE) ? ACT_NONE : disp.layout->actions[event];
 
-#if 1
-	if ((res==RX_OK || res==RX_ERROR) && (si->d.alt > 2000.0f)) {
-		action = ACT_NEXTSONDE;
+#if FEATURE_MULTICH
+	if (sonde.config.multich.active == 1) {
+		if ((res==RX_OK || res==RX_ERROR) && (si->d.alt > (float)(sonde.config.multich.alt_limit))) {
+			action = ACT_NEXTSONDE;
+		}
 	}
 #endif // 0
 
