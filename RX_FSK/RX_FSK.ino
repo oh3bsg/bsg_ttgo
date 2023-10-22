@@ -56,7 +56,7 @@ PMU *pmu = NULL;
 SemaphoreHandle_t axpSemaphore;
 extern uint8_t pmu_irq;
 
-const char *updateHost = "rdzsonde.mooo.com";
+const char *updateHost = "rdzsonde.tuu.fi";
 int updatePort = 80;
 
 const char *updatePrefixM = "/master/";

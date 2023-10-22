@@ -144,5 +144,10 @@ shfimp.interval=60
 shfimp.maxdist=150
 shfimp.maxage=6
 #-------------------------------#
+# Multichannel settings
+#-------------------------------#
+multich.active=0
+multich.alt_limit=2000
+#-------------------------------#
 # EOF
 #-------------------------------#
