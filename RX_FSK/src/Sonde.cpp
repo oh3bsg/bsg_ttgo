@@ -516,7 +516,8 @@ void Sonde::receive() {
 
 #if FEATURE_MULTICH
 	if (sonde.config.multich.active == 1) {
-		if ((res==RX_OK || res==RX_ERROR) && (si->d.alt > (float)(sonde.config.multich.alt_limit))) {
+		if ((res==RX_OK || res==RX_ERROR) && 
+		(si->d.alt > (float)(sonde.config.multich.alt_limit) || (si->d.alt == 0))) {
 			action = ACT_NEXTSONDE;
 		}
 	}
