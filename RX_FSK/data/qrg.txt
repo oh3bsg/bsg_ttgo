@@ -4,17 +4,10 @@
 # (older versions: M=M10, 2=M20, now both treaded the same: automated M10/M20 decoding)
 # +: active, -: not active
 #
-402.300 4 + Greifswald
-402.500 4 - Schleswig
-402.700 4 + HH-Sasel
-403.000 4 - DeBilt
-404.100 4 + Norderney
-404.300 4 - Schleswig_2
-404.500 4 - Meppen
-404.700 4 - Greifswald_2
-405.100 4 - Lindenberg
-405.700 4 + Bergen
-405.900 4 + Bergen_2
-405.100 4 + Meppen_2
-405.300 4 - Essen
+401.000 4 + Niinisalo
+402.000 4 + Niinisalo
+403.000 4 + Jokioinen
+404.000 4 + Tallinn
+405.000 4 + Niinisalo
+405.300 4 + Sundsvall
 # end
