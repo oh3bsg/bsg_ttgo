@@ -1,33 +1,22 @@
-import sys
-from io import StringIO
+#import sys
+#from io import StringIO
 import subprocess
 
-# Redirect stdout to an in-memory buffer
-result_buffer = StringIO()
-sys.stdout = result_buffer
+result = subprocess.run("git describe --abbrev=6 --dirty --always --tags", 
+                        shell=True, 
+                        capture_output = True,
+                        text=True)
 
-subprocess.run(["git", "describe", "--abbrev=6", "--dirty", "--always", "--tags"])
+git_versio = result.stdout
+print("GIT Version: ", git_versio)
 
-# Get the captured output
-git_version = result_buffer.getvalue()
+f = open("RX_FSK/git_version.h", "w")
 
-# Restore stdout
-sys.stdout = sys.__stdout__
+f.write("const char *version_name = \"rdzTTGOsonde\";\n")
+f.write("const char *version_id = \"Multi_ch-")
+f.write(git_versio[:-1])
+f.write("\";\n")
+f.write("const int SPIFFS_MAJOR=2;\n")
+f.write("const int SPIFFS_MINOR=17;\n")
 
-'''
-import sys
-from io import StringIO
-
-# Redirect stdout to an in-memory buffer
-result_buffer = StringIO()
-sys.stdout = result_buffer
-
-# Print something
-print("This is a test")
-
-# Get the captured output
-captured_output = result_buffer.getvalue()
-
-# Restore stdout
-sys.stdout = sys.__stdout__
-'''
+f.close()

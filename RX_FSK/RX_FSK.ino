@@ -1,5 +1,6 @@
 #include "features.h"
-#include "version.h"
+//#include "version.h"
+#include "git_version.h"
 
 #include <WiFi.h>
 #include <WiFiUdp.h>
