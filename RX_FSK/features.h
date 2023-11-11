@@ -9,7 +9,7 @@
 #define FEATURE_CHASEMAPPER 1
 #define FEATURE_MQTT 1
 #define FEATURE_SDCARD 0
-#define FEATURE_APRS 1
+#define FEATURE_APRS 0
 #define FEATURE_MULTICH 1
 
 
