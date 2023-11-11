@@ -25,4 +25,8 @@ jobs:
 
       - name: Build Filesystem image
         run: pio run --target buildfs --environment ttgo-lora32
-        
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Artifacts
+          path: path/**/[abc]rtifac?/*.bin
