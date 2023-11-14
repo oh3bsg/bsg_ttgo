@@ -34,3 +34,4 @@
 .pio
 .vscode
 /RX_FSK/git_version.h
+/RX_FSK/git_version.c

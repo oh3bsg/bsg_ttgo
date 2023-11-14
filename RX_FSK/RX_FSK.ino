@@ -44,6 +44,9 @@
 #include "src/conn-aprs.h"
 #endif
 
+#include "src/ota.h"
+#include "common.h"
+
 //#define ESP_MEM_DEBUG 1
 //int e;
 
@@ -57,13 +60,15 @@ PMU *pmu = NULL;
 SemaphoreHandle_t axpSemaphore;
 extern uint8_t pmu_irq;
 
+#if 0
 const char *updateHost = "rdzsonde.tuu.fi";
+//const char *updateHost = "heittoka.kapsi.fi";
 int updatePort = 80;
 
 const char *updatePrefixM = "/master/";
 const char *updatePrefixD = "/devel/";
 const char *updatePrefix = updatePrefixM;
-
+#endif // 0
 
 #define LOCALUDPPORT 9002
 //Get real UTC time from NTP server
@@ -119,7 +124,7 @@ static int currentDisplay = 1;
 // timestamp when spectrum display was activated
 static unsigned long specTimer;
 
-void enterMode(int mode);
+//void enterMode(int mode);
 void WiFiEvent(WiFiEvent_t event);
 
 
@@ -1223,6 +1228,13 @@ void SetupAsyncServer() {
   server.on("/update.html", HTTP_POST, [](AsyncWebServerRequest * request) {
     handleUpdatePost(request);
     request->send(200, "text/html", createUpdateForm(1));
+  });
+  server.on("/ota.html", HTTP_GET,  [](AsyncWebServerRequest * request) {
+    request->send(200, "text/html", ota_create_form(0, message));
+  });
+  server.on("/ota.html", HTTP_POST, [](AsyncWebServerRequest * request) {
+    ota_handle_post(request);
+    request->send(200, "text/html", ota_create_form(1, message));
   });
 
   server.on("/control.html", HTTP_GET,  [](AsyncWebServerRequest * request) {
@@ -2636,7 +2648,7 @@ void loopWifiScan() {
   initialMode();
 }
 
-
+#if 0
 /// Testing OTA Updates
 /// somewhat based on Arduino's AWS_S3_OTA_Update
 // Utility to extract header value from headers
@@ -2663,7 +2675,7 @@ void execOTA() {
     dispys = 20;
     disp.rdis->drawString(0, 0, updateHost);
   }
-
+#if 1
   Serial.print("Connecting to: "); Serial.println(updateHost);
   // Connect to Update host
   if (!client.connect(updateHost, updatePort)) {
@@ -2683,6 +2695,8 @@ void execOTA() {
   int type = 0;
   int res = fetchHTTPheader(&type);
   if (res < 0) {
+    // Back to some normal state
+    enterMode(ST_DECODER);
     return;
   }
   // process data...
@@ -2718,7 +2732,7 @@ void execOTA() {
     }
   }
   client.stop();
-
+#endif // 0
   Serial.print("Connecting to: "); Serial.println(updateHost);
   // Connect to Update host
   if (!client.connect(updateHost, updatePort)) {
@@ -2873,7 +2887,7 @@ int fetchHTTPheader(int *validType) {
   }
   return contentLength;
 }
-
+#endif // 0
 
 
 void loop() {
