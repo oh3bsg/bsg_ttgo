@@ -24,6 +24,11 @@ jobs:
       - name: Build PlatformIO Project
         run: pio run
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: Firmware Artifacts
+          path: .pio/build/ttgo-lora32/*.bin
+
       - name: Build Filesystem image
         run: pio run --target buildfs --environment ttgo-lora32
 
