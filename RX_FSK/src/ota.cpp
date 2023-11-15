@@ -1,4 +1,4 @@
-#include <arduino.h>
+#include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include "ota.h"
 #include "git_version.h"
