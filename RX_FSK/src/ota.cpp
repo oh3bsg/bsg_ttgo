@@ -35,8 +35,8 @@ const char *ota_create_form(boolean run, char *message) {
     strcat(ptr, "<p>Doing update, wait until reboot</p>");
   } else {
     sprintf(ptr + strlen(ptr), "<p>Currently installed: %s-%c%d</p>\n", version_id, SPIFFS_MAJOR + 'A' - 1, SPIFFS_MINOR);
-    strcat(ptr, "<p>Available release:: <iframe src=\"http://rdzsonde.mooo.com/master/update-info.html\" style=\"height:40px;width:400px\"></iframe><br>"
-           "Available devel: <iframe src=\"http://rdzsonde.mooo.com/devel/update-info.html\" style=\"height:40px;width:400px\"></iframe></p>");
+    strcat(ptr, "<p>Available release:: <iframe src=\"http://192.168.68.113/info.php?req=release_ver\" style=\"height:40px;width:400px\"></iframe><br>"
+           "Available devel: <iframe src=\"http://192.168.68.113/info.php?req=develop_ver\" style=\"height:40px;width:400px\"></iframe></p>");
     strcat(ptr, "<input type=\"submit\" name=\"master\" value=\"Master-Update\"></input><br><input type=\"submit\" name=\"devel\" value=\"Devel-Update\">");
     strcat(ptr, "<br><p>Note: If suffix is the same, update should work fully. If the number is different, update contains changes in the file system. A full re-flash is required to get all new features, but the update should not break anything. If the letter is different, a full re-flash is mandatory, update will not work</p>");
   }
