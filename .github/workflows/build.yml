@@ -17,16 +17,17 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
       - name: Install PlatformIO Core
         run: pip install --upgrade platformio
 
-      #- name: Build Filesystem image
-      #  run: pio run --target buildfs --environment ttgo-lora32
-
       - name: Build PlatformIO Project
-        run: pio run --environment ttgo-lora32 --target buildfs --environment ttgo-lora32
+        run: pio run
+
+      - name: Build Filesystem image
+        run: pio run --target buildfs --environment ttgo-lora32
 
       - uses: actions/upload-artifact@v3
         with:
-          name: Artifacts
+          name: Filesystem Artifacts
           path: .pio/build/ttgo-lora32/*.bin
