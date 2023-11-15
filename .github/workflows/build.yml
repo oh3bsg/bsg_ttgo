@@ -23,8 +23,11 @@ jobs:
       #- name: Build Filesystem image
       #  run: pio run --target buildfs --environment ttgo-lora32
 
+      - name: Targets
+        run: pio --list-targets
+        
       - name: Build PlatformIO Project
-        run: pio run , --target buildfs --environment ttgo-lora32
+        run: pio run
 
       - uses: actions/upload-artifact@v3
         with:
