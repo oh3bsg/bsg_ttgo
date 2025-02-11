@@ -2314,10 +2314,7 @@ void loopDecoder() {
 #endif
     }
 #if FEATURE_SONDEHUB
-    if (sonde.config.sondehub.active) {
-        connSondehub.updateSonde( s );   // invoke sh_send_data....
-      // sondehub_send_data(&shclient, s, &sonde.config.sondehub);
-    }
+    connSondehub.updateSonde( s );   // invoke sh_send_data....
 #endif
 
 #if FEATURE_MQTT
@@ -2329,7 +2326,6 @@ void loopDecoder() {
   } else {
 #if FEATURE_SONDEHUB
     connSondehub.updateSonde( NULL );
-    // sondehub_finish_data(&shclient, s, &sonde.config.sondehub);
 #endif
   }
 
